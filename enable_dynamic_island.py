@@ -22,6 +22,8 @@ Overview
          reduced to zero size, so its corners no longer show around the rounded notch.
      Layout "below" keeps the stock 59 pt sensor hidden inside the notch and moves expanded
      presentations below the notch instead. Layout "classic" only performs the activation.
+     With the island at the top edge, a small module loaded into MenuBarAgent also makes the
+     topmost row of pixels clickable (see "Top edge clicks" below).
 
   3. Expanded widths in client processes (layout "notch" only)
      The width of each expanded presentation is fixed in the process that renders it (for
@@ -33,6 +35,20 @@ Overview
      A few clients size their panels without .frame() and receive dedicated patches (AirDrop,
      and the battery banners shown by ControlCenter). A background helper patches clients
      that start later, such as the timer process when a timer is first started.
+
+  4. Top edge clicks (layouts "notch" and "below")
+     WindowServer routes clicks on the transparent island window by the shape of its layers. It
+     hit-tests only fully opaque content exactly; for all other content the shape loses its top
+     1 pt, so a click with the pointer pushed against the top of the screen went to the menu bar.
+     A dylib is compiled into the App Group container that MenuBarAgent may read and loaded with
+     lldb. It places an opaque black layer at the bottom of every island hit-test layer, clipped
+     by the island's own rounded container, so the clickable shape equals the visible black
+     island. Because a filter on an ancestor also disqualifies opaque content, it removes the
+     container's "colorInvertDisplayAware" filter while Invert Colors is off, where that filter
+     has no effect; with Invert Colors on, the stock layers are left untouched. WindowServer
+     sometimes keeps a stale click shape after the island's layers change, so every 0.5 s the
+     module asks WindowServer which window owns the top row of each island and, only when that
+     check fails, sets the container's filters again, which makes WindowServer recompute it.
 
 Requirements
   - macOS 27.3 beta, build 26C5035r, with the exact MenuBarAgent binary this script was
@@ -47,7 +63,8 @@ Requirements
 Notes
   - All changes are in-memory patches. They are lost when MenuBarAgent or the Mac restarts.
     Enable "apply automatically at login" to reapply them at every login.
-  - The script never modifies SIP or files on the system volume.
+  - The script never modifies SIP or files on the system volume. The only file it leaves behind
+    is the top edge module in ~/Library/Group Containers/com.apple.MenuBar, removed by --disable.
 
 Usage
   python3 enable_dynamic_island.py                      interactive setup
@@ -531,6 +548,260 @@ def patch_menubar(patches):
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
     return success, output
+
+
+# ---------------------------------------------------------------------------------------------
+# Top edge clicks (module loaded into MenuBarAgent, see "Top edge clicks" at the top)
+# ---------------------------------------------------------------------------------------------
+
+TOP_HIT_DIR = os.path.expanduser("~/Library/Group Containers/com.apple.MenuBar")   # readable in MenuBarAgent's sandbox
+TOP_HIT_PREFIX = "DynamicEnablerTopHit"
+TOP_HIT_SOURCE = r'''
+#import <AppKit/AppKit.h>
+#import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
+#import <objc/message.h>
+#import <dlfcn.h>
+
+static NSString *const kName = @"DynamicEnablerTopHit";
+static char kSavedFilters;              // container -> its filters before the invert filter was removed
+static BOOL gEnabled, gScanQueued, gWriting;
+static IMP gOrigSetHit, gOrigSetFilters;
+static int gCount, gRefreshes;
+static NSMutableArray *gCovered;        // [window, container, hit layer] of every covered island
+
+typedef int (*FindWindowFn)(int, int, int, int, const CGPoint *, CGPoint *, uint32_t *, int *);
+static int (*gMainConnection)(void);
+static FindWindowFn gFindWindow;
+
+static BOOL isHitLayer(CALayer *l) {
+    static SEL sel; if (!sel) sel = NSSelectorFromString(@"hitTestsAsOpaque");
+    return [l respondsToSelector:sel] && ((BOOL (*)(id, SEL))objc_msgSend)(l, sel);
+}
+
+static BOOL isInvertFilter(id f) {
+    for (NSString *key in @[@"type", @"name"]) {
+        @try {
+            id v = [f valueForKey:key];
+            if ([v isKindOfClass:[NSString class]] && [v isEqualToString:@"colorInvertDisplayAware"]) return YES;
+        } @catch (__unused id e) {}
+    }
+    return NO;
+}
+
+static void setFiltersRaw(CALayer *l, NSArray *filters) {
+    gWriting = YES;
+    ((void (*)(id, SEL, NSArray *))gOrigSetFilters)(l, @selector(setFilters:), filters);
+    gWriting = NO;
+}
+
+static void stripFilter(CALayer *container) {
+    NSArray *filters = container.filters;
+    if (!filters.count) return;
+    NSIndexSet *found = [filters indexesOfObjectsPassingTest:^BOOL(id f, NSUInteger i, BOOL *stop) { return isInvertFilter(f); }];
+    if (!found.count) return;
+    objc_setAssociatedObject(container, &kSavedFilters, filters, OBJC_ASSOCIATION_RETAIN);
+    NSMutableArray *rest = [filters mutableCopy];
+    [rest removeObjectsAtIndexes:found];
+    setFiltersRaw(container, rest.count ? rest : nil);
+}
+
+static void restoreFilter(CALayer *container) {
+    NSArray *saved = objc_getAssociatedObject(container, &kSavedFilters);
+    if (!saved) return;
+    objc_setAssociatedObject(container, &kSavedFilters, nil, OBJC_ASSOCIATION_RETAIN);
+    setFiltersRaw(container, saved);
+}
+
+static CALayer *underlayOf(CALayer *hit) {
+    for (CALayer *c in hit.sublayers) if ([c.name isEqualToString:kName]) return c;
+    return nil;
+}
+
+static void walk(NSWindow *w, CALayer *l, BOOL add) {
+    for (CALayer *c in [l.sublayers copy]) {
+        if ([c.name isEqualToString:kName]) continue;
+        // Island hit-test layers sit directly inside the rounded, clipping island container.
+        if (isHitLayer(c) && l.cornerRadius > 0 && l.masksToBounds) {
+            CALayer *u = underlayOf(c);
+            if (add) {
+                stripFilter(l);
+                if (!u) {
+                    u = [CALayer layer];
+                    u.name = kName;
+                    u.backgroundColor = CGColorGetConstantColor(kCGColorBlack);
+                    u.frame = c.bounds;
+                    u.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
+                    u.actions = @{@"bounds": [NSNull null], @"position": [NSNull null], @"frame": [NSNull null],
+                                  @"onOrderIn": [NSNull null], @"onOrderOut": [NSNull null]};
+                    [c insertSublayer:u atIndex:0];
+                }
+                gCount++;
+                [gCovered addObject:@[w, l, c]];
+            } else {
+                [u removeFromSuperlayer];
+                restoreFilter(l);
+            }
+        }
+        walk(w, c, add);
+    }
+}
+
+static void scan(void) {
+    BOOL add = gEnabled && !NSWorkspace.sharedWorkspace.accessibilityDisplayShouldInvertColors;
+    gCount = 0;
+    gCovered = [NSMutableArray array];
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    for (NSWindow *w in NSApp.windows) {
+        if (w.level != 26 || w.frame.size.height < 200) continue;      // the full-screen island window
+        CALayer *root = (w.contentView.superview ?: w.contentView).layer;
+        if (root) walk(w, root, add);
+    }
+    [CATransaction commit];
+}
+
+// WindowServer sometimes keeps a stale click shape after the island's layer tree changes (the
+// opaque underlay is then ignored again). It recomputes the shape when the container's filters
+// are set, so each covered island that touches the top edge is checked by asking WindowServer
+// which window owns the middle of its top row of pixels, and refreshed only when that fails.
+static BOOL topRowReachable(NSWindow *w, CALayer *hit) {
+    if (!gFindWindow || !gMainConnection) return YES;
+    CALayer *root = (w.contentView.superview ?: w.contentView).layer;
+    CGRect r = [hit convertRect:hit.bounds toLayer:root];
+    if (fabs(CGRectGetMaxY(r) - root.bounds.size.height) > 0.5) return YES;   // not at the top edge
+    if (r.size.width < r.size.height + 4) return YES;      // a circle touches the edge in one point only
+    NSRect s = [w convertRectToScreen:NSRectFromCGRect(r)];
+    CGFloat primary = NSScreen.screens.firstObject.frame.size.height;
+    CGPoint p = CGPointMake(NSMidX(s), primary - NSMaxY(s)), out;
+    uint32_t wid = 0; int owner = 0;
+    if (gFindWindow(gMainConnection(), 0, 1, 0, &p, &out, &wid, &owner) != 0) return YES;
+    return wid == (uint32_t)w.windowNumber;
+}
+
+static void checkTopRows(void) {
+    for (NSArray *item in [gCovered copy]) {
+        NSWindow *w = item[0]; CALayer *container = item[1], *hit = item[2];
+        if (!hit.superlayer || topRowReachable(w, hit)) continue;
+        gRefreshes++;
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        NSArray *current = container.filters;
+        setFiltersRaw(container, @[]);
+        setFiltersRaw(container, current);
+        ((void (*)(id, SEL, BOOL))gOrigSetHit)(hit, NSSelectorFromString(@"setHitTestsAsOpaque:"), NO);
+        ((void (*)(id, SEL, BOOL))gOrigSetHit)(hit, NSSelectorFromString(@"setHitTestsAsOpaque:"), YES);
+        [CATransaction commit];
+    }
+}
+
+__attribute__((visibility("default"))) int dynamic_enabler_top_hit_refreshes(void) { return gRefreshes; }
+
+static void queueScan(void) {
+    if (gScanQueued) return;
+    gScanQueued = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{ gScanQueued = NO; scan(); });
+}
+
+// New island layers turn on hit testing through this setter: rescan once the tree is assembled.
+static void hookedSetHit(id self, SEL _cmd, BOOL value) {
+    ((void (*)(id, SEL, BOOL))gOrigSetHit)(self, _cmd, value);
+    if (value && gEnabled) queueScan();
+}
+
+// A container whose filter was removed may get its filters assigned again.
+static void hookedSetFilters(CALayer *self, SEL _cmd, NSArray *filters) {
+    ((void (*)(id, SEL, NSArray *))gOrigSetFilters)(self, _cmd, filters);
+    if (!gWriting && objc_getAssociatedObject(self, &kSavedFilters)) {
+        objc_setAssociatedObject(self, &kSavedFilters, nil, OBJC_ASSOCIATION_RETAIN);
+        if (gEnabled) queueScan();
+    }
+}
+
+// Returns the number of island hit-test layers that are currently covered.
+__attribute__((visibility("default"))) int dynamic_enabler_top_hit(int enable) {
+    void (^work)(void) = ^{
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            Method m = class_getInstanceMethod([CALayer class], NSSelectorFromString(@"setHitTestsAsOpaque:"));
+            if (m) gOrigSetHit = method_setImplementation(m, (IMP)hookedSetHit);
+            m = class_getInstanceMethod([CALayer class], @selector(setFilters:));
+            gOrigSetFilters = method_setImplementation(m, (IMP)hookedSetFilters);
+            [NSWorkspace.sharedWorkspace.notificationCenter
+                addObserverForName:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification object:nil
+                queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) { queueScan(); }];
+            void *sky = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY);
+            if (sky && gOrigSetHit) {
+                gMainConnection = (int (*)(void))dlsym(sky, "SLSMainConnectionID");
+                gFindWindow = (FindWindowFn)dlsym(sky, "SLSFindWindowAndOwner");
+            }
+            // Every 0.5 s: check the click shapes WindowServer has from the previous pass, then
+            // cover layers that were rebuilt without going through the hooked setters.
+            NSTimer *t = [NSTimer timerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *timer) {
+                if (gEnabled) { checkTopRows(); scan(); }
+            }];
+            t.tolerance = 0.2;
+            [NSRunLoop.mainRunLoop addTimer:t forMode:NSRunLoopCommonModes];
+        });
+        gEnabled = enable != 0;
+        scan();
+    };
+    if ([NSThread isMainThread]) work(); else dispatch_sync(dispatch_get_main_queue(), work);
+    return gCount;
+}
+'''
+
+
+def remove_top_hit_files():
+    if os.path.isdir(TOP_HIT_DIR):
+        for name in os.listdir(TOP_HIT_DIR):
+            if name.startswith(TOP_HIT_PREFIX) and name.endswith(".dylib"):
+                os.remove(os.path.join(TOP_HIT_DIR, name))
+
+
+def build_top_hit():
+    """Compiles the module once per source version; returns its path or None."""
+    import hashlib
+    digest = hashlib.sha1(TOP_HIT_SOURCE.encode()).hexdigest()[:10]
+    dylib = os.path.join(TOP_HIT_DIR, f"{TOP_HIT_PREFIX}-{digest}.dylib")
+    if os.path.exists(dylib):
+        return dylib
+    if not os.path.isdir(TOP_HIT_DIR):
+        return None         # created by MenuBarAgent itself; never create it
+    remove_top_hit_files()
+    workdir = tempfile.mkdtemp(prefix="dynamic_island_")
+    try:
+        source = os.path.join(workdir, "TopHit.m")
+        with open(source, "w") as f:
+            f.write(TOP_HIT_SOURCE)
+        built = run("xcrun", "clang", "-dynamiclib", "-arch", "arm64e", "-fobjc-arc", "-O2",
+                    "-framework", "AppKit", "-framework", "QuartzCore", source, "-o", dylib)
+        if built.returncode or run("codesign", "-s", "-", "-f", dylib).returncode:
+            if os.path.exists(dylib):
+                os.remove(dylib)
+            return None
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+    return dylib
+
+
+def load_top_hit():
+    """Loads the module into the running MenuBarAgent. Returns a message, or None on success."""
+    dylib = build_top_hit()
+    if not dylib:
+        return "the module could not be compiled"
+    pid = menubaragent_pid()
+    if not pid:
+        return "MenuBarAgent is not running"
+    out = run("xcrun", "lldb", "--batch", "-o", f"process attach --pid {pid}",
+              "-o", f'expr -l c -- (long)dlopen("{dylib}", 2)',
+              "-o", 'expr -l c -- ((int(*)(int))dlsym((void*)-2, "dynamic_enabler_top_hit"))(1)',
+              "-o", "detach").stdout
+    loaded = re.search(r"\(long\) \$0 = (\d+)", out)
+    called = re.search(r"\(int\) \$1 = (\d+)", out)
+    if not loaded or loaded.group(1) == "0" or not called:
+        return "lldb could not load the module"
+    return None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1019,6 +1290,13 @@ def enable(layout, watch, report=print):
         report(output[-2000:])
         fail("The MenuBarAgent patch could not be confirmed. The previous preferences were restored.")
 
+    top_hit_note = None
+    if layout != "classic":
+        time.sleep(3)       # let the new MenuBarAgent finish launching before loading the module
+        problem = load_top_hit()
+        top_hit_note = ("Clicks at the top edge of the screen reach the island." if not problem else
+                        f"Top edge clicks were not enabled ({problem}); everything else works.")
+
     stop_watcher()
     watcher_note = None
     if layout == "notch" and watch:
@@ -1033,6 +1311,8 @@ def enable(layout, watch, report=print):
     report(f"The Dynamic Island is enabled ({description}; {len(patches)} patches).")
     if geometry:
         report(f"Notch: {geometry[0]:g} x {geometry[1]:g} pt.")
+    if top_hit_note:
+        report(top_hit_note)
     if watcher_note:
         report(watcher_note)
 
@@ -1049,6 +1329,7 @@ def disable(report=print):
     for key in DEFAULTS:
         run("defaults", "delete", DOMAIN, key)
     run("killall", "MenuBarAgent")      # launchd relaunches it without patches
+    remove_top_hit_files()
     report("The Dynamic Island is disabled. MenuBarAgent has been restarted with its stock behavior.")
 
 
