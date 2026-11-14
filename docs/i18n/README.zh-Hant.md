@@ -49,7 +49,8 @@ macOS 27（27.2 及更高版本）的 MenuBarAgent 內建了動態島實作，�
 | macOS | 27.2 或 27.3 beta。修補程式位址按版本驗證，二進位檔不符時指令碼會自動停止。 |
 | 硬體 | 帶有瀏海的 MacBook；內建顯示器必須處於啟用狀態。 |
 | SIP | 必須**關閉**系統完整性保護（SIP）。 |
-| 工具 | Xcode 或命令列工具（`xcode-select --install`）。 |
+| 工具 | 最新的 Xcode beta，並用 `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer` 切換過去。與 macOS 27 對應的命令列工具也可以；舊版工具（某些系統上 `xcode-select --install` 安裝的就是舊版）在 lldb 附加程序時會當機。 |
+| 除錯權限 | 需要免密碼除錯：執行 `sudo DevToolsSecurity -enable`，並且目前使用者在 `_developer` 群組中。否則 lldb 會一直等待「開發者工具存取」授權視窗。 |
 
 指令碼會驗證 MenuBarAgent 二進位檔的 UUID，並在寫入前比對每個修補程式位置的原始位元組。如有不符，指令碼將不作任何修改直接退出。
 

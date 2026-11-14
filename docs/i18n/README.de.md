@@ -49,7 +49,8 @@ Alle Patches erfolgen nur im Speicher. Auf dem System-Volume wird nichts geände
 | macOS | 27.2 oder 27.3 beta. Patch-Adressen werden pro Build verifiziert; das Skript stoppt, wenn die Binärdatei nicht übereinstimmt. |
 | Hardware | MacBook mit Notch; das integrierte Display muss aktiv sein. |
 | SIP | Der Systemintegritätsschutz muss **deaktiviert** sein. |
-| Tools | Xcode oder Command Line Tools (`xcode-select --install`). |
+| Tools | Die neueste Xcode-Beta, ausgewählt mit `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Command Line Tools für macOS 27 funktionieren ebenfalls; ältere Tools (auf manchen Systemen auch die von `xcode-select --install`) stürzen beim Anhängen von lldb ab. |
+| Debugging | Debugging ohne Passwort: `sudo DevToolsSecurity -enable` ausführen, und der Benutzer muss in der Gruppe `_developer` sein. Sonst wartet lldb auf den Dialog „Developer Tools Access“. |
 
 Das Skript überprüft die UUID der MenuBarAgent-Binärdatei und vergleicht jede Patch-Stelle vor dem Schreiben mit ihren erwarteten Original-Bytes. Wenn etwas abweicht, wird es ohne Änderungen beendet.
 

@@ -49,7 +49,8 @@ Tous les correctifs sont en mémoire uniquement. Rien sur le volume système n'e
 | macOS | 27.2 ou 27.3 beta. Les adresses de correctif sont vérifiées par build ; le script s'arrête si le binaire ne correspond pas. |
 | Matériel | MacBook avec encoche ; l'écran intégré doit être actif. |
 | SIP | La protection de l'intégrité du système doit être **désactivée**. |
-| Outils | Xcode ou outils en ligne de commande (`xcode-select --install`). |
+| Outils | La dernière bêta de Xcode, sélectionnée avec `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Les outils en ligne de commande pour macOS 27 conviennent aussi ; les outils plus anciens (sur certains systèmes, ceux de `xcode-select --install`) plantent lorsque lldb s'attache. |
+| Débogage | Débogage sans mot de passe : exécutez `sudo DevToolsSecurity -enable`, et votre utilisateur doit appartenir au groupe `_developer`. Sinon, lldb attend la fenêtre « Developer Tools Access ». |
 
 Le script vérifie l'UUID du binaire MenuBarAgent et compare chaque site de correctif par rapport à ses octets d'origine attendus avant d'écrire. Si quelque chose diffère, il se termine sans apporter de modifications.
 

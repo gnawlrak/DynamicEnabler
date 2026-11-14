@@ -49,7 +49,8 @@ Todos los parches están solo en memoria. No se modifica nada en el volumen del 
 | macOS | 27.2 o 27.3 beta. Las direcciones de parche se verifican por compilación; el script se detiene si el binario no coincide. |
 | Hardware | MacBook Pro con notch; la pantalla integrada debe estar activa. |
 | SIP | La Protección de Integridad del Sistema debe estar **deshabilitada**. |
-| Herramientas | Xcode o Command Line Tools (`xcode-select --install`). |
+| Herramientas | La última beta de Xcode, seleccionada con `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Las Command Line Tools para macOS 27 también sirven; las herramientas antiguas (en algunos sistemas, las de `xcode-select --install`) fallan cuando lldb se adjunta. |
+| Depuración | Depuración sin contraseña: ejecuta `sudo DevToolsSecurity -enable` y tu usuario debe pertenecer al grupo `_developer`. Si no, lldb espera al cuadro de diálogo «Developer Tools Access». |
 
 El script verifica el UUID del binario de MenuBarAgent y compara cada sitio de parche con sus bytes originales esperados antes de escribir. Si algo difiere, sale sin realizar cambios.
 

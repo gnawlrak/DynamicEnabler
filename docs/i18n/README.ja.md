@@ -49,7 +49,8 @@ macOS 27（27.2 以降）の MenuBarAgent には Dynamic Island の実装が含�
 | macOS | 27.2 または 27.3 beta。パッチアドレスはビルドごとに検証され、バイナリが一致しない場合はスクリプトが停止します。 |
 | ハードウェア | ノッチ付き MacBook。内蔵ディスプレイが有効である必要があります。 |
 | SIP | システム整合性保護を**無効**にする必要があります。 |
-| ツール | Xcode またはコマンドラインツール（`xcode-select --install`）。 |
+| ツール | 最新の Xcode beta を `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer` で選択してください。macOS 27 対応のコマンドラインツールでも動作します。古いツール（環境によっては `xcode-select --install` で入るもの）では lldb のアタッチ時にクラッシュします。 |
+| デバッグ権限 | パスワードなしのデバッグ：`sudo DevToolsSecurity -enable` を実行し、ユーザーが `_developer` グループに属している必要があります。そうでないと lldb は「Developer Tools Access」ダイアログを待ち続けます。 |
 
 スクリプトは MenuBarAgent バイナリの UUID を検証し、書き込み前に各パッチサイトを期待される元のバイトと比較します。何か異なる場合は、変更を加えずに終了します。
 

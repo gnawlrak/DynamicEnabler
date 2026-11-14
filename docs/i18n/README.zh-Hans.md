@@ -49,7 +49,8 @@ macOS 27（27.2 及更高版本）的 MenuBarAgent 内置了灵动岛实现，�
 | macOS | 27.2 或 27.3 beta。补丁地址按版本验证，二进制不匹配时脚本会自动停止。 |
 | 硬件 | 带刘海的 MacBook；内置显示器必须处于激活状态。 |
 | SIP | 必须**关闭**系统完整性保护（SIP）。 |
-| 工具 | Xcode 或命令行工具（`xcode-select --install`）。 |
+| 工具 | 最新的 Xcode beta，并用 `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer` 切换过去。与 macOS 27 对应的命令行工具也可以；旧版工具（某些系统上 `xcode-select --install` 装的就是旧版）在 lldb 附加进程时会崩溃。 |
+| 调试权限 | 需要免密调试：执行 `sudo DevToolsSecurity -enable`，并且当前用户在 `_developer` 组中。否则 lldb 会一直等待“开发者工具访问”授权框。 |
 
 脚本会验证 MenuBarAgent 二进制的 UUID，并在写入前比对每个补丁位置的原始字节。如有不符，脚本将不作任何修改直接退出。
 

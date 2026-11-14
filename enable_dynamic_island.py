@@ -39,7 +39,10 @@ Requirements
     verified against. Every patch site is compared with its original bytes before writing.
   - A MacBook Pro with a notch (the built-in display must be active).
   - System Integrity Protection disabled. lldb cannot attach to system processes otherwise.
-  - Xcode or the Command Line Tools (for lldb, clang and swift).
+  - The latest Xcode beta, or Command Line Tools that match macOS 27 (for lldb, clang and
+    swift). Older tools crash when lldb attaches.
+  - Password-free debugging: "sudo DevToolsSecurity -enable" and membership in the _developer
+    group. The script tests an lldb attach before it changes anything.
 
 Notes
   - All changes are in-memory patches. They are lost when MenuBarAgent or the Mac restarts.
@@ -137,7 +140,61 @@ def check_environment():
     if MENUBARAGENT_UUID not in run("dwarfdump", "--uuid", MENUBARAGENT).stdout.upper():
         fail("MenuBarAgent does not match the verified binary. No changes were made.")
     if run("xcode-select", "-p").returncode or run("xcrun", "--find", "lldb").returncode:
-        fail("Xcode or the Command Line Tools are required. Install them with: xcode-select --install")
+        fail("Xcode is required. Install the latest Xcode beta from https://developer.apple.com/download/all/\n"
+             "and select it with: sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer\n"
+             "(Command Line Tools that match macOS 27 also work; older versions crash when lldb attaches.)")
+
+
+def check_debug_access():
+    """lldb needs debugging rights without a password prompt; otherwise every attach waits for
+    the "Developer Tools Access" dialog (and, at login, for nobody) until it times out."""
+    in_group = "_developer" in run("id", "-Gn").stdout.split()
+    dev_mode = "currently enabled" in run("DevToolsSecurity", "-status").stdout
+    if in_group and dev_mode:
+        return
+    fail("lldb does not have permission to debug other processes without asking for a password.\n"
+         "Without it, attaching to MenuBarAgent waits for the \"Developer Tools Access\" dialog\n"
+         "and times out, and the dialog appears again after every restart.\n\n"
+         "Run these commands, then log out and back in (or restart) and run this script again:\n"
+         + ("" if dev_mode else "  sudo DevToolsSecurity -enable\n")
+         + ("" if in_group else '  sudo dseditgroup -o edit -a "$USER" -t user _developer\n')
+         + "\nNo changes were made.")
+    check_lldb_attach()
+
+
+def check_lldb_attach():
+    """Attaches lldb to a short-lived child process. An outdated lldb crashes on attach under
+    macOS 27 (SIGILL), and a missing debug right makes it wait for a dialog; both would otherwise
+    only surface later as an unconfirmed MenuBarAgent patch."""
+    target = subprocess.Popen(["/bin/sleep", "60"])
+    try:
+        try:
+            probe = subprocess.run(
+                ["xcrun", "lldb", "--batch", "-o", f"process attach --pid {target.pid}", "-o", "detach"],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30,
+                start_new_session=True)
+        except subprocess.TimeoutExpired:
+            fail("lldb did not attach to a test process within 30 seconds. It may be waiting for the\n"
+                 "\"Developer Tools Access\" dialog. Check that \"DevToolsSecurity -status\" reports\n"
+                 "enabled and that your user is in the _developer group. No changes were made.")
+        if probe.returncode == 0 and "detached" in probe.stdout:
+            return
+        version = run("xcrun", "lldb", "--version").stdout.strip().splitlines()
+        details = "\n".join(line for line in probe.stdout.strip().splitlines()[-5:] if line)
+        if probe.returncode < 0:
+            details += f"\n(lldb was terminated by signal {-probe.returncode})"
+        fail("lldb could not attach to a test process:\n"
+             f"{details}\n\n"
+             f"Developer directory: {run('xcode-select', '-p').stdout.strip()}\n"
+             f"lldb version: {version[0] if version else 'unknown'}\n\n"
+             "This usually means that the developer tools are older than macOS 27. Install the\n"
+             "latest Xcode beta from https://developer.apple.com/download/all/ and select it with:\n"
+             "  sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer\n"
+             "Then check that \"xcrun lldb --version\" reports a newer version and run this script\n"
+             "again. No changes were made.")
+    finally:
+        target.kill()
+        target.wait()
 
 
 # ---------------------------------------------------------------------------------------------
@@ -440,6 +497,7 @@ def patch_menubar(patches):
         f.write(MENUBAR_LLDB)
     cmd = ["xcrun", "lldb", "--batch", "-o", f"command script import {module}",
            "-o", "process attach --name MenuBarAgent --waitfor", "-o", f"island_apply {table}", "-o", "detach"]
+    timed_out = False
     try:
         debugger = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     text=True, start_new_session=True)
@@ -456,6 +514,7 @@ def patch_menubar(patches):
         try:
             output, _ = debugger.communicate(timeout=30)
         except subprocess.TimeoutExpired:
+            timed_out = True
             os.killpg(debugger.pid, signal.SIGINT)
             try:
                 output, _ = debugger.communicate(timeout=5)
@@ -463,6 +522,10 @@ def patch_menubar(patches):
                 os.killpg(debugger.pid, signal.SIGKILL)
                 output, _ = debugger.communicate()
         success = debugger.returncode == 0 and "PATCH_OK" in output and "detached" in output
+        if timed_out and not success:
+            output += ("\nlldb did not finish within 30 seconds. It may have been waiting for the "
+                       "\"Developer Tools Access\" dialog; check that \"DevToolsSecurity -status\" "
+                       "reports enabled and that your user is in the _developer group.")
     except OSError as exc:
         output, success = str(exc), False
     finally:
@@ -1059,6 +1122,12 @@ def main():
 
     check_sip()
     check_environment()
+    try:
+        check_debug_access()
+    except SystemExit as exc:
+        if args.login:
+            log_line(AUTOSTART_LOG, str(exc))
+        raise
 
     if args.login:
         login_run(args)

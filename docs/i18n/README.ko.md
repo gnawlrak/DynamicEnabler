@@ -49,7 +49,8 @@ macOS 27(27.2 이상)의 MenuBarAgent에는 Dynamic Island 구현이 포함되�
 | macOS | 27.2 또는 27.3 beta. 패치 주소는 빌드별로 검증되며 바이너리가 일치하지 않으면 스크립트가 중지됩니다. |
 | 하드웨어 | 노치가 있는 MacBook. 내장 디스플레이가 활성화되어 있어야 합니다. |
 | SIP | 시스템 무결성 보호를 **비활성화**해야 합니다. |
-| 도구 | Xcode 또는 명령줄 도구(`xcode-select --install`). |
+| 도구 | 최신 Xcode beta를 `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`로 선택하세요. macOS 27용 명령줄 도구도 사용할 수 있습니다. 오래된 도구(일부 환경에서는 `xcode-select --install`로 설치되는 버전)는 lldb 연결 시 충돌합니다. |
+| 디버깅 권한 | 암호 없는 디버깅: `sudo DevToolsSecurity -enable`를 실행하고, 사용자가 `_developer` 그룹에 속해 있어야 합니다. 그렇지 않으면 lldb가 "Developer Tools Access" 대화 상자를 기다립니다. |
 
 스크립트는 MenuBarAgent 바이너리의 UUID를 검증하고 쓰기 전에 각 패치 사이트를 예상 원본 바이트와 비교합니다. 차이가 있으면 변경하지 않고 종료합니다.
 

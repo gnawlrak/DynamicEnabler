@@ -49,7 +49,8 @@ All patches are in memory only. Nothing on the system volume is modified. Restar
 | macOS | 27.2 or 27.3 beta. Patch addresses are verified per build; the script stops if the binary does not match. |
 | Hardware | MacBook with a notch; the built-in display must be active. |
 | SIP | System Integrity Protection must be **disabled**. |
-| Tools | Xcode or Command Line Tools (`xcode-select --install`). |
+| Tools | The latest Xcode beta, selected with `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Command Line Tools that match macOS 27 also work; older tools (including those from `xcode-select --install` on some systems) crash when lldb attaches. |
+| Debugging | Password-free debugging: run `sudo DevToolsSecurity -enable`, and your user must be in the `_developer` group. Otherwise lldb waits for the "Developer Tools Access" dialog. |
 
 The script verifies the MenuBarAgent binary UUID and compares every patch site against its expected original bytes before writing. If anything differs, it exits without making changes.
 
