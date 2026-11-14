@@ -26,7 +26,7 @@ Enables the hidden Dynamic Island of macOS 27 on MacBook models with a display n
 
 ---
 
-macOS 27 (27.2 and later) ships a Dynamic Island implementation inside MenuBarAgent that is inactive on non-Apple-internal builds. This script activates it by patching the running MenuBarAgent process in memory, then adjusts its geometry to fit the physical notch:
+macOS 27 (27.3 and later) ships a Dynamic Island implementation inside MenuBarAgent that is inactive on non-Apple-internal builds. This script activates it by patching the running MenuBarAgent process in memory, then adjusts its geometry to fit the physical notch:
 
 - Compact and Minimal presentations sit on either side of the notch.
 - Expanded presentations start at the top of the screen and wrap around the notch.
@@ -46,7 +46,7 @@ All patches are in memory only. Nothing on the system volume is modified. Restar
 
 | Requirement | Details |
 | --- | --- |
-| macOS | 27.2 or 27.3 beta. Patch addresses are verified per build; the script stops if the binary does not match. |
+| macOS | 27.3 beta (build 26C5035r) only; other versions, including 27.2, are not supported. Patch addresses are verified per build; the script stops if the binary does not match. |
 | Hardware | MacBook with a notch; the built-in display must be active. |
 | SIP | System Integrity Protection must be **disabled**. |
 | Tools | The latest Xcode beta, selected with `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Command Line Tools that match macOS 27 also work; older tools (including those from `xcode-select --install` on some systems) crash when lldb attaches. |

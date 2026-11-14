@@ -26,7 +26,7 @@ Active la Dynamic Island cachée de macOS 27 sur les MacBook avec encoche, en l'
 
 ---
 
-macOS 27 (27.2 et versions ultérieures) inclut une implémentation de la Dynamic Island dans MenuBarAgent qui est inactive sur les builds non-Apple internes. Ce script l'active en patchant le processus MenuBarAgent en cours d'exécution en mémoire, puis ajuste sa géométrie pour s'adapter à l'encoche physique :
+macOS 27 (27.3 et versions ultérieures) inclut une implémentation de la Dynamic Island dans MenuBarAgent qui est inactive sur les builds non-Apple internes. Ce script l'active en patchant le processus MenuBarAgent en cours d'exécution en mémoire, puis ajuste sa géométrie pour s'adapter à l'encoche physique :
 
 - Les présentations compactes et minimales se positionnent de chaque côté de l'encoche.
 - Les présentations étendues commencent en haut de l'écran et s'enroulent autour de l'encoche.
@@ -46,7 +46,7 @@ Tous les correctifs sont en mémoire uniquement. Rien sur le volume système n'e
 
 | Exigence | Détails |
 | --- | --- |
-| macOS | 27.2 ou 27.3 beta. Les adresses de correctif sont vérifiées par build ; le script s'arrête si le binaire ne correspond pas. |
+| macOS | 27.3 beta (build 26C5035r) uniquement ; les autres versions, y compris 27.2, ne sont pas prises en charge. Les adresses de correctif sont vérifiées par build ; le script s'arrête si le binaire ne correspond pas. |
 | Matériel | MacBook avec encoche ; l'écran intégré doit être actif. |
 | SIP | La protection de l'intégrité du système doit être **désactivée**. |
 | Outils | La dernière bêta de Xcode, sélectionnée avec `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Les outils en ligne de commande pour macOS 27 conviennent aussi ; les outils plus anciens (sur certains systèmes, ceux de `xcode-select --install`) plantent lorsque lldb s'attache. |

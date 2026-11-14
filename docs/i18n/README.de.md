@@ -26,7 +26,7 @@ Aktiviert die versteckte Dynamic Island von macOS 27 auf MacBook-Modellen mit Di
 
 ---
 
-macOS 27 (27.2 und höher) enthält eine Dynamic Island-Implementierung in MenuBarAgent, die auf Nicht-Apple-internen Builds inaktiv ist. Dieses Skript aktiviert sie durch Patchen des laufenden MenuBarAgent-Prozesses im Speicher und passt dann ihre Geometrie an die physische Notch an:
+macOS 27 (27.3 und höher) enthält eine Dynamic Island-Implementierung in MenuBarAgent, die auf Nicht-Apple-internen Builds inaktiv ist. Dieses Skript aktiviert sie durch Patchen des laufenden MenuBarAgent-Prozesses im Speicher und passt dann ihre Geometrie an die physische Notch an:
 
 - Kompakte und minimale Darstellungen sitzen auf beiden Seiten der Notch.
 - Erweiterte Darstellungen beginnen am oberen Bildschirmrand und umschließen die Notch.
@@ -46,7 +46,7 @@ Alle Patches erfolgen nur im Speicher. Auf dem System-Volume wird nichts geände
 
 | Anforderung | Details |
 | --- | --- |
-| macOS | 27.2 oder 27.3 beta. Patch-Adressen werden pro Build verifiziert; das Skript stoppt, wenn die Binärdatei nicht übereinstimmt. |
+| macOS | Nur 27.3 beta (Build 26C5035r); andere Versionen, auch 27.2, werden nicht unterstützt. Patch-Adressen werden pro Build verifiziert; das Skript stoppt, wenn die Binärdatei nicht übereinstimmt. |
 | Hardware | MacBook mit Notch; das integrierte Display muss aktiv sein. |
 | SIP | Der Systemintegritätsschutz muss **deaktiviert** sein. |
 | Tools | Die neueste Xcode-Beta, ausgewählt mit `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Command Line Tools für macOS 27 funktionieren ebenfalls; ältere Tools (auf manchen Systemen auch die von `xcode-select --install`) stürzen beim Anhängen von lldb ab. |
