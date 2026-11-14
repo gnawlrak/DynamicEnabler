@@ -1,5 +1,5 @@
 > [!WARNING]
-> **需要解除 SIP 的除錯限制**（`csrutil enable --without debug`；完全關閉 SIP 也可以）。
+> **需要關閉系統完整性保護（SIP）。**
 > 本專案透過記憶體修補程式修改執行中的系統程序。詳見[系統需求](#系統需求)。
 
 <p align="center">
@@ -48,7 +48,7 @@ macOS 27.3 及更高版本的 MenuBarAgent 內建了動態島實作，但僅在 
 | --- | --- |
 | macOS | 僅支援 27.3 beta（build 26C5035r），27.2 等其他版本不支援。修補程式位址按版本驗證，二進位檔不符時指令碼會自動停止。 |
 | 硬體 | 帶有瀏海的 MacBook；內建顯示器必須處於啟用狀態。 |
-| SIP | 必須解除系統完整性保護（SIP）的除錯限制：在復原模式中執行 `csrutil enable --without debug`（建議，SIP 其餘保護保持開啟）。完全關閉 SIP（`csrutil disable`）也可以。 |
+| SIP | 必須**關閉**系統完整性保護（SIP）。 |
 | 工具 | 最新的 Xcode beta，並用 `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer` 切換過去。與 macOS 27 對應的命令列工具也可以；舊版工具（某些系統上 `xcode-select --install` 安裝的就是舊版）在 lldb 附加程序時會當機。 |
 | 除錯權限 | 需要免密碼除錯：執行 `sudo DevToolsSecurity -enable`，並且目前使用者在 `_developer` 群組中。否則 lldb 會一直等待「開發者工具存取」授權視窗。 |
 
@@ -60,7 +60,7 @@ macOS 27.3 及更高版本的 MenuBarAgent 內建了動態島實作，但僅在 
 python3 enable_dynamic_island.py
 ```
 
-指令碼首先檢查 SIP 的除錯限制是否已解除。如未解除，會說明操作步驟後退出。否則將依次詢問：
+指令碼首先檢查 SIP 是否已關閉。如未關閉，會說明操作步驟後退出。否則將依次詢問：
 
 1. 啟用還是停用動態島。
 2. 啟用時：是否重新啟動 Siri AI，讓 Siri AI 和 Spotlight 上島。如果 Siri AI 未開啟或無法使用，選哪個都可以。
@@ -101,4 +101,4 @@ python3 enable_dynamic_island.py --disable
 
 ## 免責聲明
 
-本專案在記憶體中修改執行中的系統程序，並需要解除 SIP 的除錯限制，這會降低系統安全性。本專案按「現狀」提供，不附帶任何保證，使用風險由使用者自行承擔。
+本專案在記憶體中修改執行中的系統程序，並需要關閉 SIP，這會降低系統安全性。本專案按「現狀」提供，不附帶任何保證，使用風險由使用者自行承擔。

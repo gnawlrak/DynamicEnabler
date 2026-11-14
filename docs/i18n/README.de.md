@@ -1,5 +1,5 @@
 > [!WARNING]
-> **Die Debugging-Einschränkung des Systemintegritätsschutzes (SIP) muss aufgehoben werden** (`csrutil enable --without debug`; ein vollständig deaktivierter SIP funktioniert ebenfalls).
+> **Die Deaktivierung der Systemintegritätsschutz (SIP) ist erforderlich.**
 > Dieses Projekt patcht laufende Systemprozesse im Speicher. Siehe [Anforderungen](#anforderungen) für Details.
 
 <p align="center">
@@ -48,7 +48,7 @@ Alle Patches erfolgen nur im Speicher. Auf dem System-Volume wird nichts geände
 | --- | --- |
 | macOS | Nur 27.3 beta (Build 26C5035r); andere Versionen, auch 27.2, werden nicht unterstützt. Patch-Adressen werden pro Build verifiziert; das Skript stoppt, wenn die Binärdatei nicht übereinstimmt. |
 | Hardware | MacBook mit Notch; das integrierte Display muss aktiv sein. |
-| SIP | Die Debugging-Einschränkung des Systemintegritätsschutzes muss aufgehoben sein: Im Wiederherstellungsmodus `csrutil enable --without debug` ausführen (empfohlen; der übrige SIP bleibt aktiv). Ein vollständig deaktivierter SIP (`csrutil disable`) funktioniert ebenfalls. |
+| SIP | Der Systemintegritätsschutz muss **deaktiviert** sein. |
 | Tools | Die neueste Xcode-Beta, ausgewählt mit `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Command Line Tools für macOS 27 funktionieren ebenfalls; ältere Tools (auf manchen Systemen auch die von `xcode-select --install`) stürzen beim Anhängen von lldb ab. |
 | Debugging | Debugging ohne Passwort: `sudo DevToolsSecurity -enable` ausführen, und der Benutzer muss in der Gruppe `_developer` sein. Sonst wartet lldb auf den Dialog „Developer Tools Access“. |
 
@@ -60,7 +60,7 @@ Das Skript überprüft die UUID der MenuBarAgent-Binärdatei und vergleicht jede
 python3 enable_dynamic_island.py
 ```
 
-Das Skript prüft zunächst, ob die Debugging-Einschränkung des SIP aufgehoben ist. Falls nicht, erklärt es, wie man sie aufhebt, und wird beendet. Andernfalls stellt es folgende Fragen:
+Das Skript prüft zunächst, ob SIP deaktiviert ist. Falls nicht, erklärt es, wie man es deaktiviert, und wird beendet. Andernfalls stellt es folgende Fragen:
 
 1. Dynamic Island aktivieren oder deaktivieren.
 2. Bei Aktivierung: ob Siri AI neu gestartet werden soll, damit Siri AI und Spotlight in der Insel erscheinen. Ist Siri AI ausgeschaltet oder nicht verfügbar, ist die Wahl egal.
@@ -101,4 +101,4 @@ Stoppt den Hintergrund-Helfer, entfernt die Anmeldeaktivierung, stellt Client-Pr
 
 ## Haftungsausschluss
 
-Dieses Projekt ändert laufende Systemprozesse im Speicher und erfordert die Aufhebung der Debugging-Einschränkung des SIP, was die Systemsicherheit verringert. Es wird wie besehen ohne Garantie bereitgestellt. Verwendung auf eigene Gefahr.
+Dieses Projekt ändert laufende Systemprozesse im Speicher und erfordert die Deaktivierung von SIP, was die Systemsicherheit verringert. Es wird wie besehen ohne Garantie bereitgestellt. Verwendung auf eigene Gefahr.

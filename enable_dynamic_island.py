@@ -54,8 +54,7 @@ Requirements
   - macOS 27.3 beta, build 26C5035r, with the exact MenuBarAgent binary this script was
     verified against. Every patch site is compared with its original bytes before writing.
   - A MacBook Pro with a notch (the built-in display must be active).
-  - SIP's debugging restriction lifted ("csrutil enable --without debug" in Recovery), or SIP
-    fully disabled. lldb cannot attach to system processes otherwise.
+  - System Integrity Protection disabled. lldb cannot attach to system processes otherwise.
   - The latest Xcode beta, or Command Line Tools that match macOS 27 (for lldb, clang and
     swift). Older tools crash when lldb attaches.
   - Password-free debugging: "sudo DevToolsSecurity -enable" and membership in the _developer
@@ -139,23 +138,21 @@ def menubaragent_pid():
 # ---------------------------------------------------------------------------------------------
 
 def check_sip():
-    """Only SIP's debugging restriction blocks lldb; the rest of SIP can stay on."""
     status = run("csrutil", "status").stdout
-    if re.search(r"status:\s*disabled", status, re.I) or \
-            re.search(r"Debugging Restrictions:\s*disabled", status, re.I):
+    if re.search(r"status:\s*disabled", status, re.I):
         return
     sys.exit(
         "System Integrity Protection (SIP) is enabled.\n"
-        "This script attaches to MenuBarAgent and other system processes with lldb, which SIP's\n"
-        "debugging restriction does not allow. No further steps can be performed until it is lifted.\n\n"
-        "To lift only the debugging restriction (recommended; the rest of SIP stays on):\n"
+        "This script attaches to MenuBarAgent and other system processes with lldb, which SIP\n"
+        "does not allow. No further steps can be performed until SIP is disabled.\n\n"
+        "To disable SIP:\n"
         "  1. Shut down the Mac.\n"
         "  2. Press and hold the power button until \"Loading startup options\" appears.\n"
         "  3. Select Options, then choose Utilities > Terminal.\n"
-        "  4. Run: csrutil enable --without debug\n"
+        "  4. Run: csrutil disable\n"
         "  5. Restart the Mac and run this script again.\n\n"
-        "Fully disabled SIP (csrutil disable) also works. Run \"csrutil enable\" from\n"
-        "Recovery to restore full protection.")
+        "Disabling SIP reduces the security of the system. Run \"csrutil enable\" from\n"
+        "Recovery to turn it back on.")
 
 
 def check_environment():

@@ -1,5 +1,5 @@
 > [!WARNING]
-> **需要解除 SIP 的调试限制**（`csrutil enable --without debug`；完全关闭 SIP 也可以）。
+> **需要关闭系统完整性保护（SIP）。**
 > 本项目通过内存补丁修改运行中的系统进程。详见[系统要求](#系统要求)。
 
 <p align="center">
@@ -48,7 +48,7 @@ macOS 27.3 及更高版本的 MenuBarAgent 内置了灵动岛实现，但仅在�
 | --- | --- |
 | macOS | 仅支持 27.3 beta（build 26C5035r），27.2 等其他版本不支持。补丁地址按版本验证，二进制不匹配时脚本会自动停止。 |
 | 硬件 | 带刘海的 MacBook；内置显示器必须处于激活状态。 |
-| SIP | 必须解除系统完整性保护（SIP）的调试限制：在恢复模式中运行 `csrutil enable --without debug`（推荐，SIP 其余保护保持开启）。完全关闭 SIP（`csrutil disable`）也可以。 |
+| SIP | 必须**关闭**系统完整性保护（SIP）。 |
 | 工具 | 最新的 Xcode beta，并用 `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer` 切换过去。与 macOS 27 对应的命令行工具也可以；旧版工具（某些系统上 `xcode-select --install` 装的就是旧版）在 lldb 附加进程时会崩溃。 |
 | 调试权限 | 需要免密调试：执行 `sudo DevToolsSecurity -enable`，并且当前用户在 `_developer` 组中。否则 lldb 会一直等待“开发者工具访问”授权框。 |
 
@@ -60,7 +60,7 @@ macOS 27.3 及更高版本的 MenuBarAgent 内置了灵动岛实现，但仅在�
 python3 enable_dynamic_island.py
 ```
 
-脚本首先检查 SIP 的调试限制是否已解除。如未解除，会说明操作步骤后退出。否则将依次询问：
+脚本首先检查 SIP 是否已关闭。如未关闭，会说明操作步骤后退出。否则将依次询问：
 
 1. 启用还是禁用灵动岛。
 2. 启用时：是否重启 Siri AI，让 Siri AI 和聚焦搜索（Spotlight）上岛。如果 Siri AI 未开启或不可用，选哪个都行。
@@ -101,4 +101,4 @@ python3 enable_dynamic_island.py --disable
 
 ## 免责声明
 
-本项目在内存中修改运行中的系统进程，并需要解除 SIP 的调试限制，这会降低系统安全性。本项目按"现状"提供，不附带任何保证，使用风险由用户自行承担。
+本项目在内存中修改运行中的系统进程，并需要关闭 SIP，这会降低系统安全性。本项目按"现状"提供，不附带任何保证，使用风险由用户自行承担。

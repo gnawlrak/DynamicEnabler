@@ -1,5 +1,5 @@
 > [!WARNING]
-> **Se requiere levantar la restricción de depuración de SIP** (`csrutil enable --without debug`; deshabilitar SIP por completo también funciona).
+> **Se requiere deshabilitar la Protección de Integridad del Sistema (SIP).**
 > Este proyecto parchea procesos del sistema en ejecución en memoria. Consulte [Requisitos](#requisitos) para más detalles.
 
 <p align="center">
@@ -48,7 +48,7 @@ Todos los parches están solo en memoria. No se modifica nada en el volumen del 
 | --- | --- |
 | macOS | Solo 27.3 beta (compilación 26C5035r); otras versiones, incluida 27.2, no son compatibles. Las direcciones de parche se verifican por compilación; el script se detiene si el binario no coincide. |
 | Hardware | MacBook Pro con notch; la pantalla integrada debe estar activa. |
-| SIP | Debe levantarse la restricción de depuración de la Protección de Integridad del Sistema: en el modo de recuperación, ejecute `csrutil enable --without debug` (recomendado; el resto de SIP sigue activo). Deshabilitar SIP por completo (`csrutil disable`) también funciona. |
+| SIP | La Protección de Integridad del Sistema debe estar **deshabilitada**. |
 | Herramientas | La última beta de Xcode, seleccionada con `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Las Command Line Tools para macOS 27 también sirven; las herramientas antiguas (en algunos sistemas, las de `xcode-select --install`) fallan cuando lldb se adjunta. |
 | Depuración | Depuración sin contraseña: ejecuta `sudo DevToolsSecurity -enable` y tu usuario debe pertenecer al grupo `_developer`. Si no, lldb espera al cuadro de diálogo «Developer Tools Access». |
 
@@ -60,7 +60,7 @@ El script verifica el UUID del binario de MenuBarAgent y compara cada sitio de p
 python3 enable_dynamic_island.py
 ```
 
-El script primero verifica si la restricción de depuración de SIP está levantada. Si no, explica cómo levantarla y sale. De lo contrario, pregunta:
+El script primero verifica si SIP está deshabilitado. Si no, explica cómo deshabilitarlo y sale. De lo contrario, pregunta:
 
 1. Activar o desactivar la Dynamic Island.
 2. Si se activa: si reiniciar Siri AI para que Siri AI y Spotlight aparezcan en la isla. Si Siri AI está desactivado o no disponible en tu Mac, cualquier opción sirve.
@@ -101,4 +101,4 @@ Detiene el ayudante en segundo plano, elimina la activación al iniciar sesión,
 
 ## Descargo de responsabilidad
 
-Este proyecto modifica procesos del sistema en ejecución en memoria y requiere levantar la restricción de depuración de SIP, lo que reduce la seguridad del sistema. Se proporciona tal cual, sin garantía. Úselo bajo su propio riesgo.
+Este proyecto modifica procesos del sistema en ejecución en memoria y requiere deshabilitar SIP, lo que reduce la seguridad del sistema. Se proporciona tal cual, sin garantía. Úselo bajo su propio riesgo.
