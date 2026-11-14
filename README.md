@@ -63,7 +63,8 @@ python3 enable_dynamic_island.py
 The script first checks whether SIP's debugging restriction is lifted. If not, it explains how to do so and exits. Otherwise it asks:
 
 1. Enable or disable the Dynamic Island.
-2. If enabling: whether to apply it automatically at every login.
+2. If enabling: whether to restart Siri AI so that Siri AI and Spotlight appear in the island. If Siri AI is off or not available on your Mac, either choice is fine.
+3. If enabling: whether to apply the Dynamic Island automatically at every login.
 
 ### Non-interactive mode
 
@@ -81,6 +82,8 @@ Additional options:
 | `--layout below` | Expanded presentations appear below the notch at stock widths. |
 | `--layout classic` | Activation only; island stays at the stock position below the menu bar. |
 | `--no-watch` | Do not start the background helper. |
+| `--restart-siri` | Restart Siri AI after patching so that Siri AI and Spotlight appear in the island (also at login with `--autostart`). No effect if Siri AI is off or not available. |
+| `--no-restart-siri` | Leave Siri AI as it is. Without either option, the login item's current setting is kept. |
 
 ### Disabling
 

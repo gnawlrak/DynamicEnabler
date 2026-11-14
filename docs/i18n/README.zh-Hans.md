@@ -63,7 +63,8 @@ python3 enable_dynamic_island.py
 脚本首先检查 SIP 的调试限制是否已解除。如未解除，会说明操作步骤后退出。否则将依次询问：
 
 1. 启用还是禁用灵动岛。
-2. 启用时：是否在每次登录时自动应用。
+2. 启用时：是否重启 Siri AI，让 Siri AI 和聚焦搜索（Spotlight）上岛。如果 Siri AI 未开启或不可用，选哪个都行。
+3. 启用时：是否在每次登录时自动应用。
 
 ### 非交互模式
 
@@ -81,6 +82,8 @@ python3 enable_dynamic_island.py --disable                 # 禁用并移除登�
 | `--layout below` | 展开态显示在刘海下方，保持系统原始宽度。 |
 | `--layout classic` | 仅激活，不调整位置，岛停留在菜单栏下方的默认位置。 |
 | `--no-watch` | 不启动后台守护进程。 |
+| `--restart-siri` | 补丁完成后重启 Siri AI，让 Siri AI 和聚焦搜索上岛（配合 `--autostart` 时登录时也会执行）。Siri AI 未开启或不可用时无影响。 |
+| `--no-restart-siri` | 不动 Siri AI。两个选项都不传时，沿用登录项当前的设置。 |
 
 ### 禁用
 

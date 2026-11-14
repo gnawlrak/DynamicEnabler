@@ -63,7 +63,8 @@ python3 enable_dynamic_island.py
 스크립트는 먼저 SIP의 디버깅 제한이 해제되어 있는지 확인합니다. 해제되어 있지 않으면 해제 방법을 설명하고 종료합니다. 그렇지 않으면 다음을 묻습니다:
 
 1. Dynamic Island를 활성화할지 비활성화할지.
-2. 활성화하는 경우: 로그인할 때마다 자동으로 적용할지 여부.
+2. 활성화하는 경우: Siri AI를 재시작하여 Siri AI와 Spotlight를 아일랜드에 표시할지 여부. Siri AI가 꺼져 있거나 사용할 수 없으면 어느 쪽을 선택해도 됩니다.
+3. 활성화하는 경우: 로그인할 때마다 자동으로 적용할지 여부.
 
 ### 비대화형 모드
 
@@ -81,6 +82,8 @@ python3 enable_dynamic_island.py --disable                 # 비활성화하고 
 | `--layout below` | 확장 표시가 노치 아래에 기본 너비로 표시됩니다. |
 | `--layout classic` | 활성화만. 아일랜드가 메뉴 막대 아래의 기본 위치에 유지됩니다. |
 | `--no-watch` | 백그라운드 헬퍼를 시작하지 않습니다. |
+| `--restart-siri` | 패치 후 Siri AI를 재시작하여 Siri AI와 Spotlight를 아일랜드에 표시합니다(`--autostart`와 함께 쓰면 로그인 시에도 실행). Siri AI가 꺼져 있거나 사용할 수 없으면 영향이 없습니다. |
+| `--no-restart-siri` | Siri AI를 그대로 둡니다. 둘 다 지정하지 않으면 로그인 항목의 현재 설정을 유지합니다. |
 
 ### 비활성화
 

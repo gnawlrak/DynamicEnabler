@@ -63,7 +63,8 @@ python3 enable_dynamic_island.py
 指令碼首先檢查 SIP 的除錯限制是否已解除。如未解除，會說明操作步驟後退出。否則將依次詢問：
 
 1. 啟用還是停用動態島。
-2. 啟用時：是否在每次登入時自動套用。
+2. 啟用時：是否重新啟動 Siri AI，讓 Siri AI 和 Spotlight 上島。如果 Siri AI 未開啟或無法使用，選哪個都可以。
+3. 啟用時：是否在每次登入時自動套用。
 
 ### 非互動模式
 
@@ -81,6 +82,8 @@ python3 enable_dynamic_island.py --disable                 # 停用並移除登�
 | `--layout below` | 展開態顯示在瀏海下方，保持系統原始寬度。 |
 | `--layout classic` | 僅啟用，不調整位置，島停留在選單列下方的預設位置。 |
 | `--no-watch` | 不啟動背景守護程式。 |
+| `--restart-siri` | 補丁完成後重新啟動 Siri AI，讓 Siri AI 和 Spotlight 上島（搭配 `--autostart` 時登入時也會執行）。Siri AI 未開啟或無法使用時沒有影響。 |
+| `--no-restart-siri` | 不動 Siri AI。兩個選項都不傳時，沿用登入項目目前的設定。 |
 
 ### 停用
 

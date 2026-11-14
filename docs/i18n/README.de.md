@@ -63,7 +63,8 @@ python3 enable_dynamic_island.py
 Das Skript prüft zunächst, ob die Debugging-Einschränkung des SIP aufgehoben ist. Falls nicht, erklärt es, wie man sie aufhebt, und wird beendet. Andernfalls stellt es folgende Fragen:
 
 1. Dynamic Island aktivieren oder deaktivieren.
-2. Bei Aktivierung: ob es bei jeder Anmeldung automatisch angewendet werden soll.
+2. Bei Aktivierung: ob Siri AI neu gestartet werden soll, damit Siri AI und Spotlight in der Insel erscheinen. Ist Siri AI ausgeschaltet oder nicht verfügbar, ist die Wahl egal.
+3. Bei Aktivierung: ob es bei jeder Anmeldung automatisch angewendet werden soll.
 
 ### Nicht-interaktiver Modus
 
@@ -81,6 +82,8 @@ Zusätzliche Optionen:
 | `--layout below` | Erweiterte Darstellungen erscheinen unterhalb der Notch in Standardbreiten. |
 | `--layout classic` | Nur Aktivierung; Insel bleibt an der Standardposition unterhalb der Menüleiste. |
 | `--no-watch` | Hintergrund-Helfer nicht starten. |
+| `--restart-siri` | Startet Siri AI nach dem Patchen neu, damit Siri AI und Spotlight in der Insel erscheinen (mit `--autostart` auch bei der Anmeldung). Keine Wirkung, wenn Siri AI ausgeschaltet oder nicht verfügbar ist. |
+| `--no-restart-siri` | Siri AI unverändert lassen. Ohne eine der beiden Optionen bleibt die aktuelle Einstellung des Anmeldeobjekts erhalten. |
 
 ### Deaktivierung
 

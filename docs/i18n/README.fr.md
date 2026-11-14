@@ -63,7 +63,8 @@ python3 enable_dynamic_island.py
 Le script vérifie d'abord si la restriction de débogage du SIP est levée. Sinon, il explique comment la lever et se termine. Sinon, il demande :
 
 1. Activer ou désactiver la Dynamic Island.
-2. En cas d'activation : s'il faut l'appliquer automatiquement à chaque connexion.
+2. En cas d'activation : s'il faut redémarrer Siri AI pour que Siri AI et Spotlight apparaissent dans l'îlot. Si Siri AI est désactivé ou indisponible sur votre Mac, les deux choix conviennent.
+3. En cas d'activation : s'il faut l'appliquer automatiquement à chaque connexion.
 
 ### Mode non interactif
 
@@ -81,6 +82,8 @@ Options supplémentaires :
 | `--layout below` | Les présentations étendues apparaissent sous l'encoche aux largeurs standard. |
 | `--layout classic` | Activation uniquement ; l'île reste à la position standard sous la barre de menus. |
 | `--no-watch` | Ne pas démarrer l'assistant en arrière-plan. |
+| `--restart-siri` | Redémarre Siri AI après l'application des correctifs pour que Siri AI et Spotlight apparaissent dans l'îlot (aussi à la connexion avec `--autostart`). Sans effet si Siri AI est désactivé ou indisponible. |
+| `--no-restart-siri` | Laisse Siri AI tel quel. Sans l'une ou l'autre option, le réglage actuel de l'élément de connexion est conservé. |
 
 ### Désactivation
 

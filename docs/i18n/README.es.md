@@ -63,7 +63,8 @@ python3 enable_dynamic_island.py
 El script primero verifica si la restricción de depuración de SIP está levantada. Si no, explica cómo levantarla y sale. De lo contrario, pregunta:
 
 1. Activar o desactivar la Dynamic Island.
-2. Si se activa: si aplicarla automáticamente en cada inicio de sesión.
+2. Si se activa: si reiniciar Siri AI para que Siri AI y Spotlight aparezcan en la isla. Si Siri AI está desactivado o no disponible en tu Mac, cualquier opción sirve.
+3. Si se activa: si aplicarla automáticamente en cada inicio de sesión.
 
 ### Modo no interactivo
 
@@ -81,6 +82,8 @@ Opciones adicionales:
 | `--layout below` | Las presentaciones expandidas aparecen debajo del notch con anchos estándar. |
 | `--layout classic` | Solo activación; la isla permanece en la posición estándar debajo de la barra de menús. |
 | `--no-watch` | No iniciar el ayudante en segundo plano. |
+| `--restart-siri` | Reinicia Siri AI tras aplicar los parches para que Siri AI y Spotlight aparezcan en la isla (también al iniciar sesión con `--autostart`). Sin efecto si Siri AI está desactivado o no disponible. |
+| `--no-restart-siri` | Deja Siri AI como está. Sin ninguna de las dos opciones, se mantiene la configuración actual del elemento de inicio. |
 
 ### Desactivación
 

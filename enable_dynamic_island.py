@@ -64,12 +64,17 @@ Requirements
 Notes
   - All changes are in-memory patches. They are lost when MenuBarAgent or the Mac restarts.
     Enable "apply automatically at login" to reapply them at every login.
+  - Siri AI (which also draws Spotlight) connects to the island only when it starts. If it was
+    already running, it stays out of the island until it restarts; --restart-siri quits it once
+    the patches are in place (macOS starts it again when it is needed). If Siri AI is off or not
+    available on the Mac, this makes no difference.
   - The script never modifies SIP or files on the system volume. The only file it leaves behind
     is the top edge module in ~/Library/Group Containers/com.apple.MenuBar, removed by --disable.
 
 Usage
   python3 enable_dynamic_island.py                      interactive setup
   python3 enable_dynamic_island.py --enable [--autostart | --no-autostart] [--layout notch|below|classic]
+                                   [--restart-siri | --no-restart-siri]
   python3 enable_dynamic_island.py --disable
 """
 
@@ -1230,16 +1235,26 @@ def stop_watcher():
 # Automatic activation at login
 # ---------------------------------------------------------------------------------------------
 
-def install_autostart(layout, watch):
+def install_autostart(layout, watch, restart_siri):
     """Copies the script to Application Support and registers a login LaunchAgent."""
     os.makedirs(SUPPORT_DIR, exist_ok=True)
     installed = os.path.join(SUPPORT_DIR, SCRIPT_NAME)
     if os.path.abspath(__file__) != installed:
         shutil.copy2(os.path.abspath(__file__), installed)
-    arguments = [PYTHON, installed, "--login", "--layout", layout] + ([] if watch else ["--no-watch"])
+    arguments = [PYTHON, installed, "--login", "--layout", layout] + ([] if watch else ["--no-watch"]) \
+        + (["--restart-siri"] if restart_siri else [])
     os.makedirs(os.path.dirname(AUTOSTART_PLIST), exist_ok=True)
     with open(AUTOSTART_PLIST, "wb") as f:
         plistlib.dump(launchd_job(AUTOSTART_LABEL, arguments, AUTOSTART_LOG), f)
+
+
+def autostart_restarts_siri():
+    """Whether the installed login item restarts Siri AI."""
+    try:
+        with open(AUTOSTART_PLIST, "rb") as f:
+            return "--restart-siri" in plistlib.load(f).get("ProgramArguments", [])
+    except (OSError, plistlib.InvalidFileException):
+        return False
 
 
 def remove_autostart():
@@ -1277,7 +1292,19 @@ def set_defaults():
     return restore
 
 
-def enable(layout, watch, report=print):
+SIRI_AI = "Siri AI"      # process name of /System/Applications/Siri AI.app, which also draws Spotlight
+
+
+def restart_siri_ai():
+    """Quits Siri AI so it reconnects to the patched MenuBarAgent; macOS relaunches it on demand."""
+    if run("pgrep", "-x", SIRI_AI).returncode:
+        return "Siri AI is not running; it will use the island when it starts."
+    if run("killall", SIRI_AI).returncode:
+        return "Siri AI could not be restarted. Run: killall \"Siri AI\""
+    return "Siri AI was restarted so that it reconnects to the island (Siri AI and Spotlight)."
+
+
+def enable(layout, watch, restart_siri=False, report=print):
     patches, geometry = build_patches(layout)
     restore = set_defaults()
 
@@ -1300,6 +1327,8 @@ def enable(layout, watch, report=print):
         top_hit_note = ("Clicks at the top edge of the screen reach the island." if not problem else
                         f"Top edge clicks were not enabled ({problem}); everything else works.")
 
+    siri_note = restart_siri_ai() if restart_siri else None
+
     stop_watcher()
     watcher_note = None
     if layout == "notch" and watch:
@@ -1316,6 +1345,8 @@ def enable(layout, watch, report=print):
         report(f"Notch: {geometry[0]:g} x {geometry[1]:g} pt.")
     if top_hit_note:
         report(top_hit_note)
+    if siri_note:
+        report(siri_note)
     if watcher_note:
         report(watcher_note)
 
@@ -1371,6 +1402,12 @@ def parse_args():
     parser.add_argument("--layout", choices=LAYOUTS, default="notch",
                         help="notch: wrap around the notch (default); below: expanded presentations "
                              "below the notch; classic: activation only")
+    siri = parser.add_mutually_exclusive_group()
+    siri.add_argument("--restart-siri", dest="restart_siri", action="store_true", default=None,
+                      help="restart Siri AI after patching so that Siri AI and Spotlight appear in the "
+                           "island (no effect if Siri AI is off or not available)")
+    siri.add_argument("--no-restart-siri", dest="restart_siri", action="store_false",
+                      help="leave Siri AI running as it is")
     parser.add_argument("--no-watch", action="store_true",
                         help="do not start the background helper for clients that start later")
     parser.add_argument("--watcher", type=int, help=argparse.SUPPRESS)
@@ -1391,7 +1428,7 @@ def login_run(args):
         sys.exit(1)
     time.sleep(5)       # let the login session settle before restarting MenuBarAgent
     try:
-        enable(args.layout, not args.no_watch, report=report)
+        enable(args.layout, not args.no_watch, bool(args.restart_siri), report=report)
     except SystemExit as exc:
         report(str(exc))
         raise
@@ -1428,19 +1465,28 @@ def main():
         disable()
         return
 
+    restart_siri = args.restart_siri    # None: keep the login item's setting (non-interactive use only)
+    if restart_siri is None and interactive:
+        restart_siri = ask("Restart Siri AI so that Siri AI and Spotlight appear in the Dynamic Island?\n"
+                           "(If Siri AI is off or not available on this Mac, either choice is fine.)",
+                           [(True, "Yes, restart Siri AI"),
+                            (False, "No, leave Siri AI as it is")])
+    if restart_siri is None:
+        restart_siri = autostart_restarts_siri()
+
     autostart = args.autostart      # None: keep the current setting (non-interactive use only)
     if autostart is None and interactive:
         autostart = ask("Apply the Dynamic Island automatically at every login?",
                         [(True, "Yes, apply it at login"),
                          (False, "No, apply it only now (run this script again after a restart)")])
 
-    enable(args.layout, not args.no_watch)
+    enable(args.layout, not args.no_watch, restart_siri)
     if autostart is None:
         autostart = os.path.exists(AUTOSTART_PLIST)
         if autostart:
-            install_autostart(args.layout, not args.no_watch)       # refresh the installed copy
+            install_autostart(args.layout, not args.no_watch, restart_siri)   # refresh the installed copy
     elif autostart:
-        install_autostart(args.layout, not args.no_watch)
+        install_autostart(args.layout, not args.no_watch, restart_siri)
         print(f"Automatic activation at login is enabled (log: {AUTOSTART_LOG}).")
         print("macOS may show a \"Background Items Added\" notification for this login item.")
     elif remove_autostart():
