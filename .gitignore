@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# Local research material (screenshots, old script versions, test app builds)
+experiments/

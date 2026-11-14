@@ -1,0 +1,100 @@
+> [!WARNING]
+> **Se requiere deshabilitar la Protección de Integridad del Sistema (SIP).**
+> Este proyecto parchea procesos del sistema en ejecución en memoria. Consulte [Requisitos](#requisitos) para más detalles.
+
+<p align="center">
+  <a href="../../README.md">English</a> · <a href="README.zh-Hans.md">简体中文</a> · <a href="README.zh-Hant.md">繁體中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> · <a href="README.de.md">Deutsch</a> · <b>Español</b>
+</p>
+
+<p align="center">
+  <a href="https://x.com/jazminli57"><img src="https://img.shields.io/badge/Follow-%40jazminli57-000000?logo=x&logoColor=white" alt="Follow @jazminli57 on X"></a>
+</p>
+
+---
+
+# DynamicEnabler
+
+Activa la Dynamic Island oculta de macOS 27 en modelos de MacBook Pro con notch, integrándola con el notch físico.
+
+<p align="center">
+  <a href="#cómo-funciona">Cómo funciona</a> ·
+  <a href="#requisitos">Requisitos</a> ·
+  <a href="#uso">Uso</a> ·
+  <a href="#limitaciones-conocidas">Limitaciones conocidas</a> ·
+  <a href="#descargo-de-responsabilidad">Descargo de responsabilidad</a>
+</p>
+
+---
+
+macOS 27 (27.2 y posteriores) incluye una implementación de Dynamic Island dentro de MenuBarAgent que está inactiva en compilaciones que no son de Apple internas. Este script la activa parcheando el proceso MenuBarAgent en ejecución en memoria, luego ajusta su geometría para adaptarse al notch físico:
+
+- Las presentaciones compactas y mínimas se sitúan a ambos lados del notch.
+- Las presentaciones expandidas comienzan en la parte superior de la pantalla y rodean el notch.
+- Los paneles expandidos de Live Activities del sistema (temporizadores, Reproduciendo, AirDrop, grabación de pantalla, actividades reflejadas de iPhone) y banners de batería se amplían para que su contenido no quede oculto detrás del notch.
+
+## Cómo funciona
+
+- **Activación.** MenuBarAgent lee dos preferencias, `EmulateCenterHUD` y `ShowSoftwareNotch`, cada una protegida por una verificación `IsAppleInternalBuild()`. El script establece ambas preferencias y reemplaza las dos protecciones con instrucciones `nop`.
+- **Geometría del notch.** La Dynamic Island estándar se dibuja alrededor de un área de sensor virtual de 59 × 34 pt debajo de la barra de menús. Las funciones que devuelven este rectángulo se redirigen a pequeñas cavidades de código que leen el rectángulo real del notch desde `NSScreen` en tiempo de ejecución.
+- **Anchos de paneles.** El ancho de cada panel expandido está fijo en el proceso cliente que lo renderiza. El script intercepta los inicializadores de frame de SwiftUI en esos procesos y reemplaza los anchos en el rango expandido. Los clientes con dimensionamiento inusual (AirDrop, banners de batería en ControlCenter) reciben parches dedicados.
+- **Ayudante en segundo plano.** Los clientes de Live Activity como el proceso del temporizador se inician bajo demanda. Un trabajo auxiliar (`local.dynamic-island.watcher`) monitorea el registro de MenuBarAgent y parchea nuevos clientes a medida que aparecen. Sale cuando MenuBarAgent sale. Registro: `~/Library/Logs/dynamic_island_watcher.log`.
+- **Activación al iniciar sesión.** El script puede copiarse a sí mismo en `~/Library/Application Support/DynamicEnabler/` e instalar un LaunchAgent (`local.dynamic-island.autostart`) que vuelve a aplicar los parches en cada inicio de sesión. Registro: `~/Library/Logs/dynamic_island_autostart.log`.
+
+Todos los parches están solo en memoria. No se modifica nada en el volumen del sistema. Reiniciar MenuBarAgent o el Mac elimina los parches a menos que la activación al iniciar sesión esté habilitada.
+
+## Requisitos
+
+| Requisito | Detalles |
+| --- | --- |
+| macOS | 27.2 o 27.3 beta. Las direcciones de parche se verifican por compilación; el script se detiene si el binario no coincide. |
+| Hardware | MacBook Pro con notch; la pantalla integrada debe estar activa. |
+| SIP | La Protección de Integridad del Sistema debe estar **deshabilitada**. |
+| Herramientas | Xcode o Command Line Tools (`xcode-select --install`). |
+
+El script verifica el UUID del binario de MenuBarAgent y compara cada sitio de parche con sus bytes originales esperados antes de escribir. Si algo difiere, sale sin realizar cambios.
+
+## Uso
+
+```bash
+python3 enable_dynamic_island.py
+```
+
+El script primero verifica si SIP está deshabilitado. Si no, explica cómo deshabilitarlo y sale. De lo contrario, pregunta:
+
+1. Activar o desactivar la Dynamic Island.
+2. Si se activa: si aplicarla automáticamente en cada inicio de sesión.
+
+### Modo no interactivo
+
+```bash
+python3 enable_dynamic_island.py --enable --autostart      # activar y volver a aplicar en cada inicio de sesión
+python3 enable_dynamic_island.py --enable --no-autostart   # activar solo para esta sesión
+python3 enable_dynamic_island.py --disable                 # desactivar y eliminar activación al iniciar sesión
+```
+
+Opciones adicionales:
+
+| Opción | Efecto |
+| --- | --- |
+| `--layout notch` | Predeterminado. Las presentaciones expandidas rodean el notch. |
+| `--layout below` | Las presentaciones expandidas aparecen debajo del notch con anchos estándar. |
+| `--layout classic` | Solo activación; la isla permanece en la posición estándar debajo de la barra de menús. |
+| `--no-watch` | No iniciar el ayudante en segundo plano. |
+
+### Desactivación
+
+```bash
+python3 enable_dynamic_island.py --disable
+```
+
+Detiene el ayudante en segundo plano, elimina la activación al iniciar sesión, restaura los anchos de los procesos cliente, elimina las dos preferencias y reinicia MenuBarAgent.
+
+## Limitaciones conocidas
+
+- Solo probado en MacBook Pro con notch; la geometría de pantallas externas se basa solo en la pantalla integrada.
+- Las Live Activities de terceros renderizadas por WidgetKit mantienen los anchos elegidos por sus aplicaciones.
+- El ancho del banner de batería baja no se ha verificado en pantalla.
+
+## Descargo de responsabilidad
+
+Este proyecto modifica procesos del sistema en ejecución en memoria y requiere deshabilitar SIP, lo que reduce la seguridad del sistema. Se proporciona tal cual, sin garantía. Úselo bajo su propio riesgo.
