@@ -1,5 +1,5 @@
 > [!WARNING]
-> **시스템 무결성 보호(SIP)를 비활성화해야 합니다.**
+> **SIP의 디버깅 제한을 해제해야 합니다** (`csrutil enable --without debug`, SIP를 완전히 비활성화해도 됩니다).
 > 이 프로젝트는 실행 중인 시스템 프로세스를 메모리에서 패치합니다. 자세한 내용은 [시스템 요구사항](#시스템-요구사항)을 참조하세요.
 
 <p align="center">
@@ -48,7 +48,7 @@ macOS 27(27.3 이상)의 MenuBarAgent에는 Dynamic Island 구현이 포함되�
 | --- | --- |
 | macOS | 27.3 beta(빌드 26C5035r)만 지원하며, 27.2 등 다른 버전은 지원하지 않습니다. 패치 주소는 빌드별로 검증되며 바이너리가 일치하지 않으면 스크립트가 중지됩니다. |
 | 하드웨어 | 노치가 있는 MacBook. 내장 디스플레이가 활성화되어 있어야 합니다. |
-| SIP | 시스템 무결성 보호를 **비활성화**해야 합니다. |
+| SIP | 시스템 무결성 보호의 디버깅 제한을 해제해야 합니다. 복구 모드에서 `csrutil enable --without debug`를 실행하세요(권장, 나머지 SIP 보호는 유지됨). SIP를 완전히 비활성화(`csrutil disable`)해도 됩니다. |
 | 도구 | 최신 Xcode beta를 `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`로 선택하세요. macOS 27용 명령줄 도구도 사용할 수 있습니다. 오래된 도구(일부 환경에서는 `xcode-select --install`로 설치되는 버전)는 lldb 연결 시 충돌합니다. |
 | 디버깅 권한 | 암호 없는 디버깅: `sudo DevToolsSecurity -enable`를 실행하고, 사용자가 `_developer` 그룹에 속해 있어야 합니다. 그렇지 않으면 lldb가 "Developer Tools Access" 대화 상자를 기다립니다. |
 
@@ -60,7 +60,7 @@ macOS 27(27.3 이상)의 MenuBarAgent에는 Dynamic Island 구현이 포함되�
 python3 enable_dynamic_island.py
 ```
 
-스크립트는 먼저 SIP가 비활성화되어 있는지 확인합니다. 비활성화되어 있지 않으면 비활성화 방법을 설명하고 종료합니다. 그렇지 않으면 다음을 묻습니다:
+스크립트는 먼저 SIP의 디버깅 제한이 해제되어 있는지 확인합니다. 해제되어 있지 않으면 해제 방법을 설명하고 종료합니다. 그렇지 않으면 다음을 묻습니다:
 
 1. Dynamic Island를 활성화할지 비활성화할지.
 2. 활성화하는 경우: 로그인할 때마다 자동으로 적용할지 여부.
@@ -98,4 +98,4 @@ python3 enable_dynamic_island.py --disable
 
 ## 면책 조항
 
-이 프로젝트는 실행 중인 시스템 프로세스를 메모리에서 수정하며 SIP를 비활성화해야 하므로 시스템 보안이 저하됩니다. 이 프로젝트는 "있는 그대로" 제공되며 보증이 없습니다. 사용은 본인의 책임입니다.
+이 프로젝트는 실행 중인 시스템 프로세스를 메모리에서 수정하며 SIP의 디버깅 제한을 해제해야 하므로 시스템 보안이 저하됩니다. 이 프로젝트는 "있는 그대로" 제공되며 보증이 없습니다. 사용은 본인의 책임입니다.

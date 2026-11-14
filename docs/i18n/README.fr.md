@@ -1,5 +1,5 @@
 > [!WARNING]
-> **La désactivation de la protection de l'intégrité du système (SIP) est requise.**
+> **La levée de la restriction de débogage du SIP est requise** (`csrutil enable --without debug` ; désactiver complètement le SIP fonctionne aussi).
 > Ce projet modifie les processus système en cours d'exécution en mémoire. Voir [Exigences](#exigences) pour plus de détails.
 
 <p align="center">
@@ -48,7 +48,7 @@ Tous les correctifs sont en mémoire uniquement. Rien sur le volume système n'e
 | --- | --- |
 | macOS | 27.3 beta (build 26C5035r) uniquement ; les autres versions, y compris 27.2, ne sont pas prises en charge. Les adresses de correctif sont vérifiées par build ; le script s'arrête si le binaire ne correspond pas. |
 | Matériel | MacBook avec encoche ; l'écran intégré doit être actif. |
-| SIP | La protection de l'intégrité du système doit être **désactivée**. |
+| SIP | La restriction de débogage de la protection de l'intégrité du système doit être levée : en mode de récupération, exécutez `csrutil enable --without debug` (recommandé ; le reste du SIP reste actif). Un SIP entièrement désactivé (`csrutil disable`) fonctionne aussi. |
 | Outils | La dernière bêta de Xcode, sélectionnée avec `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Les outils en ligne de commande pour macOS 27 conviennent aussi ; les outils plus anciens (sur certains systèmes, ceux de `xcode-select --install`) plantent lorsque lldb s'attache. |
 | Débogage | Débogage sans mot de passe : exécutez `sudo DevToolsSecurity -enable`, et votre utilisateur doit appartenir au groupe `_developer`. Sinon, lldb attend la fenêtre « Developer Tools Access ». |
 
@@ -60,7 +60,7 @@ Le script vérifie l'UUID du binaire MenuBarAgent et compare chaque site de corr
 python3 enable_dynamic_island.py
 ```
 
-Le script vérifie d'abord si le SIP est désactivé. Sinon, il explique comment le désactiver et se termine. Sinon, il demande :
+Le script vérifie d'abord si la restriction de débogage du SIP est levée. Sinon, il explique comment la lever et se termine. Sinon, il demande :
 
 1. Activer ou désactiver la Dynamic Island.
 2. En cas d'activation : s'il faut l'appliquer automatiquement à chaque connexion.
@@ -98,4 +98,4 @@ Arrête l'assistant en arrière-plan, supprime l'activation à la connexion, res
 
 ## Avertissement
 
-Ce projet modifie les processus système en cours d'exécution en mémoire et nécessite la désactivation du SIP, ce qui réduit la sécurité du système. Il est fourni tel quel, sans garantie. Utilisez-le à vos propres risques.
+Ce projet modifie les processus système en cours d'exécution en mémoire et nécessite la levée de la restriction de débogage du SIP, ce qui réduit la sécurité du système. Il est fourni tel quel, sans garantie. Utilisez-le à vos propres risques.
