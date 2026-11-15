@@ -1,5 +1,5 @@
 > [!WARNING]
-> **Die Debugging-Einschränkung des Systemintegritätsschutzes (SIP) muss aufgehoben werden** (`csrutil enable --without debug`; ein vollständig deaktivierter SIP funktioniert ebenfalls).
+> **Der Systemintegritätsschutz (SIP) muss deaktiviert werden.** `csrutil enable --without debug` aktiviert alles außer Klicks am oberen Rand der Insel; nur ein vollständiges `csrutil disable` aktiviert diese.
 > Dieses Projekt patcht laufende Systemprozesse im Speicher. Siehe [Anforderungen](#anforderungen) für Details.
 
 <p align="center">

@@ -1,5 +1,5 @@
 > [!WARNING]
-> **SIP의 디버깅 제한을 해제해야 합니다** (`csrutil enable --without debug`, SIP를 완전히 비활성화해도 됩니다).
+> **시스템 무결성 보호(SIP)를 비활성화해야 합니다.** `csrutil enable --without debug`로 상단 클릭을 제외한 모든 기능을 사용할 수 있으며, 상단 클릭은 완전히 비활성화(`csrutil disable`)해야만 됩니다.
 > 이 프로젝트는 실행 중인 시스템 프로세스를 메모리에서 패치합니다. 자세한 내용은 [시스템 요구사항](#시스템-요구사항)을 참조하세요.
 
 <p align="center">

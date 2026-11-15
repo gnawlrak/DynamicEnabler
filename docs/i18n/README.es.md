@@ -1,5 +1,5 @@
 > [!WARNING]
-> **Se requiere levantar la restricción de depuración de SIP** (`csrutil enable --without debug`; deshabilitar SIP por completo también funciona).
+> **Se requiere deshabilitar la Protección de Integridad del Sistema (SIP).** `csrutil enable --without debug` habilita todo excepto los clics en el borde superior de la isla; solo un `csrutil disable` completo los habilita.
 > Este proyecto parchea procesos del sistema en ejecución en memoria. Consulte [Requisitos](#requisitos) para más detalles.
 
 <p align="center">

@@ -1,5 +1,5 @@
 > [!WARNING]
-> **Lifting SIP's debugging restriction is required** (`csrutil enable --without debug`; fully disabling SIP also works).
+> **Disabling System Integrity Protection (SIP) is required.** `csrutil enable --without debug` enables everything except top-edge clicks on the island; only a full `csrutil disable` enables those.
 > This project patches running system processes in memory. See [Requirements](#requirements) for details.
 
 <p align="center">

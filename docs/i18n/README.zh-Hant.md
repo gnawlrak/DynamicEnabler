@@ -1,5 +1,5 @@
 > [!WARNING]
-> **需要解除 SIP 的除錯限制**（`csrutil enable --without debug`；完全關閉 SIP 也可以）。
+> **需要關閉系統完整性保護（SIP）。** `csrutil enable --without debug` 可啟用除頂部點擊外的全部功能；只有完全 `csrutil disable` 才能點擊靈動島頂部。
 > 本專案透過記憶體修補程式修改執行中的系統程序。詳見[系統需求](#系統需求)。
 
 <p align="center">

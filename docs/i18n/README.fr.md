@@ -1,5 +1,5 @@
 > [!WARNING]
-> **La levée de la restriction de débogage du SIP est requise** (`csrutil enable --without debug` ; désactiver complètement le SIP fonctionne aussi).
+> **La désactivation de la protection de l'intégrité du système (SIP) est requise.** `csrutil enable --without debug` active tout sauf les clics sur le bord supérieur de l'îlot ; seuls ceux-ci exigent une désactivation complète (`csrutil disable`).
 > Ce projet modifie les processus système en cours d'exécution en mémoire. Voir [Exigences](#exigences) pour plus de détails.
 
 <p align="center">

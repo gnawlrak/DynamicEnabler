@@ -1,5 +1,5 @@
 > [!WARNING]
-> **需要解除 SIP 的调试限制**（`csrutil enable --without debug`；完全关闭 SIP 也可以）。
+> **需要关闭系统完整性保护（SIP）。** `csrutil enable --without debug` 可启用除顶部点击外的全部功能；只有完全 `csrutil disable` 才能点击灵动岛顶部。
 > 本项目通过内存补丁修改运行中的系统进程。详见[系统要求](#系统要求)。
 
 <p align="center">
