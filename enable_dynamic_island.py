@@ -767,10 +767,15 @@ __attribute__((visibility("default"))) int dynamic_enabler_top_hit(int enable) {
 
 
 def remove_top_hit_files():
-    if os.path.isdir(TOP_HIT_DIR):
-        for name in os.listdir(TOP_HIT_DIR):
-            if name.startswith(TOP_HIT_PREFIX) and name.endswith(".dylib"):
-                os.remove(os.path.join(TOP_HIT_DIR, name))
+    # Under partial SIP the App Group container is not even listable; there is nothing of ours to
+    # remove in that case (the module was never installed), so ignore the permission error.
+    try:
+        names = os.listdir(TOP_HIT_DIR) if os.path.isdir(TOP_HIT_DIR) else []
+    except OSError:
+        return
+    for name in names:
+        if name.startswith(TOP_HIT_PREFIX) and name.endswith(".dylib"):
+            os.remove(os.path.join(TOP_HIT_DIR, name))
 
 
 def top_hit_dir_ready():
@@ -970,10 +975,15 @@ def install(p, addrs, P):
     done = 0
     for kind in ("frame", "flex"):
         fn = addrs[kind]
-        if any(fn <= pc < fn + 16 for pc in pcs): continue
         head = p.ReadMemory(fn, 16, e)
         if not head: continue
-        if head[:8] == TRAMPOLINE:                  # already hooked: reuse the existing cave
+        already = head[:8] == TRAMPOLINE
+        if any(fn <= pc < fn + 16 for pc in pcs):
+            # A thread is in the first 16 bytes. Never rewrite bytes that are executing; if the
+            # function is already hooked it is still in place, so count it rather than failing.
+            if already: done += 1
+            continue
+        if already:                                 # already hooked: reuse the existing cave
             mem = struct.unpack("<Q", head[8:])[0] - HEADER
             displaced = struct.unpack("<4I", p.ReadMemory(mem, 16, e))
         else:
@@ -1087,14 +1097,29 @@ def run_lldb_module(pid, module_name, source, command):
 FRAME_ADDRS = {}    # SwiftUI frame initializer addresses, reused after the first lookup
 
 
-def patch_frames(pid, params, name="", neutral=False):
+def patch_frames(pid, params, name="", neutral=False, tries=4):
+    # Returns "ok", "fail", or "skip". "skip" means the process has no SwiftUICore, so it is not a
+    # Live Activity SwiftUI client (e.g. a log pid that has since been recycled to another process).
+    # A client that is still launching may be executing the frame initializers at attach time, which
+    # makes a hook fail transiently; the PC moves on, so retry a few times before giving up.
     arg = json.dumps({"params": client_params(name, params), "addrs": FRAME_ADDRS or None,
                       "extras": client_extras(name, params, neutral)})
-    out = run_lldb_module(pid, "island_frames", FRAMES_LLDB, "island_frames " + arg)
-    found = re.search(r"^FRAMES_ADDRS (.*)$", out, re.M)
-    if found:
-        FRAME_ADDRS.update(json.loads(found.group(1)))
-    return "FRAMES_OK" in out
+    for attempt in range(tries):
+        out = run_lldb_module(pid, "island_frames", FRAMES_LLDB, "island_frames " + arg)
+        found = re.search(r"^FRAMES_ADDRS (.*)$", out, re.M)
+        if found:
+            FRAME_ADDRS.update(json.loads(found.group(1)))
+        if "FRAMES_OK" in out:
+            return "ok"
+        if "FRAMES_NOSYMBOL" in out:
+            return "skip"       # no SwiftUICore in this process; not a client, retrying will not help
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return "skip"       # the client exited
+        if attempt + 1 < tries:
+            time.sleep(0.7)
+    return "fail"
 
 
 def control_center_pid():
@@ -1140,8 +1165,10 @@ def patch_clients(notch_w, neutral=False, report=print):
     params = frame_params(notch_w, neutral)
     done = "restored" if neutral else "patched"
     for pid, name in live_activity_clients().items():
-        ok = patch_frames(pid, params, name, neutral)
-        report(f"  {name}: {done if ok else 'failed'}")
+        status = patch_frames(pid, params, name, neutral)
+        if status == "skip":        # recycled pid or non-SwiftUI process; not a real client
+            continue
+        report(f"  {name}: {done if status == 'ok' else 'failed'}")
     ok = patch_banner(notch_w, neutral)
     report(f"  Battery banners (ControlCenter): {done if ok else 'failed'}")
 
@@ -1180,8 +1207,10 @@ def run_watcher(mba_pid):
         for pid, name in clients.items():
             if pid not in done:
                 done.add(pid)
-                ok = patch_frames(pid, params, name)
-                note(f"{name} (pid {pid}): {'patched' if ok else 'failed'}")
+                status = patch_frames(pid, params, name)
+                if status == "skip":        # recycled pid or non-SwiftUI process; not a real client
+                    continue
+                note(f"{name} (pid {pid}): {'patched' if status == 'ok' else 'failed'}")
 
     def check_banner():         # reapply when ControlCenter restarts
         pid = control_center_pid()
@@ -1318,7 +1347,11 @@ def restart_siri_ai():
     return "Siri AI was restarted so that it reconnects to the island (Siri AI and Spotlight)."
 
 
-def enable(layout, watch, restart_siri=False, report=print):
+def enable(layout, watch, restart_siri=False, warn_partial_sip=True, report=print):
+    if warn_partial_sip and layout != "classic" and not sip_fully_disabled():
+        report("Note: SIP is only partially disabled, so clicks on the top edge of the screen will "
+               "not reach the island. Fully disabling SIP (csrutil disable) enables them.")
+
     patches, geometry = build_patches(layout)
     restore = set_defaults()
 
@@ -1335,15 +1368,11 @@ def enable(layout, watch, restart_siri=False, report=print):
         fail("The MenuBarAgent patch could not be confirmed. The previous preferences were restored.")
 
     top_hit_note = None
-    if layout != "classic":
-        if not sip_fully_disabled():
-            top_hit_note = ("Top edge clicks need SIP fully disabled (csrutil disable); the rest "
-                            "works with only the debugging restriction lifted.")
-        else:
-            time.sleep(3)   # let the new MenuBarAgent finish launching before loading the module
-            problem = load_top_hit()
-            top_hit_note = ("Clicks at the top edge of the screen reach the island." if not problem else
-                            f"Top edge clicks were not enabled ({problem}); everything else works.")
+    if layout != "classic" and sip_fully_disabled():    # partial SIP: already warned up front
+        time.sleep(3)       # let the new MenuBarAgent finish launching before loading the module
+        problem = load_top_hit()
+        top_hit_note = ("Clicks at the top edge of the screen reach the island." if not problem else
+                        f"Top edge clicks were not enabled ({problem}); everything else works.")
 
     siri_note = restart_siri_ai() if restart_siri else None
 
@@ -1476,6 +1505,10 @@ def main():
     if interactive and not sys.stdin.isatty():
         fail("Run the script in a terminal, or pass --enable or --disable.")
 
+    if interactive and args.layout != "classic" and not sip_fully_disabled():
+        print("Note: SIP is only partially disabled, so clicks on the top edge of the screen will "
+              "not reach the island.\nFully disabling SIP (csrutil disable) enables them.\n")
+
     action = "enable" if args.enable else "disable" if args.disable else ask(
         "What would you like to do?", [("enable", "Enable the Dynamic Island"),
                                        ("disable", "Disable the Dynamic Island")])
@@ -1498,7 +1531,7 @@ def main():
                         [(True, "Yes, apply it at login"),
                          (False, "No, apply it only now (run this script again after a restart)")])
 
-    enable(args.layout, not args.no_watch, restart_siri)
+    enable(args.layout, not args.no_watch, restart_siri, warn_partial_sip=not interactive)
     if autostart is None:
         autostart = os.path.exists(AUTOSTART_PLIST)
         if autostart:
