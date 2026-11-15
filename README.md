@@ -1,5 +1,5 @@
 > [!WARNING]
-> **Disabling System Integrity Protection (SIP) is required.**
+> **Lifting SIP's debugging restriction is required** (`csrutil enable --without debug`; fully disabling SIP also works).
 > This project patches running system processes in memory. See [Requirements](#requirements) for details.
 
 <p align="center">
@@ -48,7 +48,7 @@ All patches are in memory only. Nothing on the system volume is modified. Restar
 | --- | --- |
 | macOS | 27.3 beta (build 26C5035r) only; other versions, including 27.2, are not supported. Patch addresses are verified per build; the script stops if the binary does not match. |
 | Hardware | MacBook with a notch; the built-in display must be active. |
-| SIP | System Integrity Protection must be **disabled**. |
+| SIP | System Integrity Protection's debugging restriction must be lifted: in Recovery, run `csrutil enable --without debug` (recommended; the rest of SIP stays on). Fully disabled SIP (`csrutil disable`) also works. Note: with only the debugging restriction lifted, top-edge clicks on the island are unavailable; fully disabling SIP enables them. |
 | Tools | The latest Xcode beta, selected with `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Command Line Tools that match macOS 27 also work; older tools (including those from `xcode-select --install` on some systems) crash when lldb attaches. |
 | Debugging | Password-free debugging: run `sudo DevToolsSecurity -enable`, and your user must be in the `_developer` group. Otherwise lldb waits for the "Developer Tools Access" dialog. |
 
@@ -60,7 +60,7 @@ The script verifies the MenuBarAgent binary UUID and compares every patch site a
 python3 enable_dynamic_island.py
 ```
 
-The script first checks whether SIP is disabled. If not, it explains how to disable it and exits. Otherwise it asks:
+The script first checks whether SIP's debugging restriction is lifted. If not, it explains how to do so and exits. Otherwise it asks:
 
 1. Enable or disable the Dynamic Island.
 2. If enabling: whether to restart Siri AI so that Siri AI and Spotlight appear in the island. If Siri AI is off or not available on your Mac, either choice is fine.
@@ -101,4 +101,4 @@ Stops the background helper, removes login activation, restores client process w
 
 ## Disclaimer
 
-This project modifies running system processes in memory and requires SIP to be disabled, which reduces system security. It is provided as-is, without warranty. Use at your own risk.
+This project modifies running system processes in memory and requires SIP's debugging restriction to be lifted, which reduces system security. It is provided as-is, without warranty. Use at your own risk.

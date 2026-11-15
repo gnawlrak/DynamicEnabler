@@ -54,7 +54,8 @@ Requirements
   - macOS 27.3 beta, build 26C5035r, with the exact MenuBarAgent binary this script was
     verified against. Every patch site is compared with its original bytes before writing.
   - A MacBook Pro with a notch (the built-in display must be active).
-  - System Integrity Protection disabled. lldb cannot attach to system processes otherwise.
+  - SIP's debugging restriction lifted ("csrutil enable --without debug" in Recovery), or SIP
+    fully disabled. lldb cannot attach to system processes otherwise.
   - The latest Xcode beta, or Command Line Tools that match macOS 27 (for lldb, clang and
     swift). Older tools crash when lldb attaches.
   - Password-free debugging: "sudo DevToolsSecurity -enable" and membership in the _developer
@@ -137,22 +138,30 @@ def menubaragent_pid():
 # Environment checks
 # ---------------------------------------------------------------------------------------------
 
+def sip_fully_disabled():
+    """True only when SIP is fully off. Partial SIP still protects the App Group container,
+    so the top edge module cannot be installed and top edge clicks are unavailable."""
+    return bool(re.search(r"status:\s*disabled", run("csrutil", "status").stdout, re.I))
+
+
 def check_sip():
+    """Only SIP's debugging restriction blocks lldb; the rest of SIP can stay on."""
     status = run("csrutil", "status").stdout
-    if re.search(r"status:\s*disabled", status, re.I):
+    if re.search(r"status:\s*disabled", status, re.I) or \
+            re.search(r"Debugging Restrictions:\s*disabled", status, re.I):
         return
     sys.exit(
         "System Integrity Protection (SIP) is enabled.\n"
-        "This script attaches to MenuBarAgent and other system processes with lldb, which SIP\n"
-        "does not allow. No further steps can be performed until SIP is disabled.\n\n"
-        "To disable SIP:\n"
+        "This script attaches to MenuBarAgent and other system processes with lldb, which SIP's\n"
+        "debugging restriction does not allow. No further steps can be performed until it is lifted.\n\n"
+        "To lift only the debugging restriction (recommended; the rest of SIP stays on):\n"
         "  1. Shut down the Mac.\n"
         "  2. Press and hold the power button until \"Loading startup options\" appears.\n"
         "  3. Select Options, then choose Utilities > Terminal.\n"
-        "  4. Run: csrutil disable\n"
+        "  4. Run: csrutil enable --without debug\n"
         "  5. Restart the Mac and run this script again.\n\n"
-        "Disabling SIP reduces the security of the system. Run \"csrutil enable\" from\n"
-        "Recovery to turn it back on.")
+        "Fully disabled SIP (csrutil disable) also works. Run \"csrutil enable\" from\n"
+        "Recovery to restore full protection.")
 
 
 def check_environment():
@@ -764,15 +773,23 @@ def remove_top_hit_files():
                 os.remove(os.path.join(TOP_HIT_DIR, name))
 
 
+def top_hit_dir_ready():
+    """The App Group container must be listable to install the module. Partial SIP blocks it."""
+    try:
+        return os.path.isdir(TOP_HIT_DIR) and os.listdir(TOP_HIT_DIR) is not None
+    except OSError:
+        return False
+
+
 def build_top_hit():
     """Compiles the module once per source version; returns its path or None."""
     import hashlib
     digest = hashlib.sha1(TOP_HIT_SOURCE.encode()).hexdigest()[:10]
     dylib = os.path.join(TOP_HIT_DIR, f"{TOP_HIT_PREFIX}-{digest}.dylib")
+    if not top_hit_dir_ready():
+        return None         # the container is created by MenuBarAgent and is unreadable under partial SIP
     if os.path.exists(dylib):
         return dylib
-    if not os.path.isdir(TOP_HIT_DIR):
-        return None         # created by MenuBarAgent itself; never create it
     remove_top_hit_files()
     workdir = tempfile.mkdtemp(prefix="dynamic_island_")
     try:
@@ -1319,10 +1336,14 @@ def enable(layout, watch, restart_siri=False, report=print):
 
     top_hit_note = None
     if layout != "classic":
-        time.sleep(3)       # let the new MenuBarAgent finish launching before loading the module
-        problem = load_top_hit()
-        top_hit_note = ("Clicks at the top edge of the screen reach the island." if not problem else
-                        f"Top edge clicks were not enabled ({problem}); everything else works.")
+        if not sip_fully_disabled():
+            top_hit_note = ("Top edge clicks need SIP fully disabled (csrutil disable); the rest "
+                            "works with only the debugging restriction lifted.")
+        else:
+            time.sleep(3)   # let the new MenuBarAgent finish launching before loading the module
+            problem = load_top_hit()
+            top_hit_note = ("Clicks at the top edge of the screen reach the island." if not problem else
+                            f"Top edge clicks were not enabled ({problem}); everything else works.")
 
     siri_note = restart_siri_ai() if restart_siri else None
 
