@@ -1,5 +1,5 @@
 > [!WARNING]
-> **Der Systemintegritätsschutz (SIP) muss deaktiviert werden.** `csrutil enable --without debug` aktiviert alles außer Klicks am oberen Rand der Insel; nur ein vollständiges `csrutil disable` aktiviert diese.
+> **Nur die Debugging-Einschränkung von SIP muss aufgehoben werden.** Verwende `csrutil enable --without debug`; der Dateisystemschutz kann aktiviert bleiben, auch für das Modul für Klicks am oberen Inselrand in den Layouts `notch`/`below`.
 > Dieses Projekt patcht laufende Systemprozesse im Speicher. Siehe [Anforderungen](#anforderungen) für Details.
 
 <p align="center">
@@ -48,7 +48,7 @@ Alle Patches erfolgen nur im Speicher. Auf dem System-Volume wird nichts geände
 | --- | --- |
 | macOS | Nur 27.3 beta (Build 26C5035r); andere Versionen, auch 27.2, werden nicht unterstützt. Patch-Adressen werden pro Build verifiziert; das Skript stoppt, wenn die Binärdatei nicht übereinstimmt. |
 | Hardware | MacBook mit Notch; das integrierte Display muss aktiv sein. |
-| SIP | Die Debugging-Einschränkung des Systemintegritätsschutzes muss aufgehoben sein: Im Wiederherstellungsmodus `csrutil enable --without debug` ausführen (empfohlen; der übrige SIP bleibt aktiv). Ein vollständig deaktivierter SIP (`csrutil disable`) funktioniert ebenfalls. Hinweis: Ist nur die Debugging-Einschränkung aufgehoben, sind Klicks am oberen Bildschirmrand nicht verfügbar; ein vollständig deaktivierter SIP aktiviert sie. |
+| SIP | Nur die Debugging-Einschränkung von SIP muss aufgehoben sein: Im Wiederherstellungsmodus `csrutil enable --without debug` ausführen. Das Modul für Klicks am oberen Inselrand in den Layouts `notch`/`below` wird per JIT im Arbeitsspeicher kompiliert, ohne in den App-Group-Container zu schreiben oder eine dylib einzubinden; der Dateisystemschutz kann aktiviert bleiben. |
 | Tools | Die neueste Xcode-Beta, ausgewählt mit `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Command Line Tools für macOS 27 funktionieren ebenfalls; ältere Tools (auf manchen Systemen auch die von `xcode-select --install`) stürzen beim Anhängen von lldb ab. |
 | Debugging | Debugging ohne Passwort: `sudo DevToolsSecurity -enable` ausführen, und der Benutzer muss in der Gruppe `_developer` sein. Sonst wartet lldb auf den Dialog „Developer Tools Access“. |
 

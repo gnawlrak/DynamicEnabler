@@ -1,5 +1,5 @@
 > [!WARNING]
-> **Disabling System Integrity Protection (SIP) is required.** `csrutil enable --without debug` enables everything except top-edge clicks on the island; only a full `csrutil disable` enables those.
+> **Only SIP's debugging restriction needs to be lifted.** Use `csrutil enable --without debug`; filesystem protections can remain enabled, including for the `notch`/`below` top-edge click module.
 > This project patches running system processes in memory. See [Requirements](#requirements) for details.
 
 <p align="center">
@@ -48,7 +48,7 @@ All patches are in memory only. Nothing on the system volume is modified. Restar
 | --- | --- |
 | macOS | 27.3 beta (build 26C5035r) only; other versions, including 27.2, are not supported. Patch addresses are verified per build; the script stops if the binary does not match. |
 | Hardware | MacBook with a notch; the built-in display must be active. |
-| SIP | System Integrity Protection's debugging restriction must be lifted: in Recovery, run `csrutil enable --without debug` (recommended; the rest of SIP stays on). Fully disabled SIP (`csrutil disable`) also works. Note: with only the debugging restriction lifted, top-edge clicks on the island are unavailable; fully disabling SIP enables them. |
+| SIP | Only SIP's debugging restriction must be lifted: in Recovery, run `csrutil enable --without debug`. The `notch`/`below` top-edge click module is JIT-compiled in memory, with no App Group container writes or dylib mapping; filesystem protections can remain enabled. |
 | Tools | The latest Xcode beta, selected with `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer`. Command Line Tools that match macOS 27 also work; older tools (including those from `xcode-select --install` on some systems) crash when lldb attaches. |
 | Debugging | Password-free debugging: run `sudo DevToolsSecurity -enable`, and your user must be in the `_developer` group. Otherwise lldb waits for the "Developer Tools Access" dialog. |
 

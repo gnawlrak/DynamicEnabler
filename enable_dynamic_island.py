@@ -40,10 +40,12 @@ Overview
      WindowServer routes clicks on the transparent island window by the shape of its layers. It
      hit-tests only fully opaque content exactly; for all other content the shape loses its top
      1 pt, so a click with the pointer pushed against the top of the screen went to the menu bar.
-     A dylib is compiled into the App Group container that MenuBarAgent may read and loaded with
-     lldb. It places an opaque black layer at the bottom of every island hit-test layer, clipped
-     by the island's own rounded container, so the clickable shape equals the visible black
-     island. Because a filter on an ancestor also disqualifies opaque content, it removes the
+     LLDB compiles a small native module directly into process memory using debugging rights.
+     It places an opaque black layer at the bottom of every island hit-test layer, clipped by
+     the island's own rounded container, so the clickable shape equals the visible black
+     island. A 1 pt opaque strip over the flat part of the painted top row also closes the
+     narrow dead band left by the rounded hit shape. Because a filter on an ancestor also
+     disqualifies opaque content, it removes the
      container's "colorInvertDisplayAware" filter while Invert Colors is off, where that filter
      has no effect; with Invert Colors on, the stock layers are left untouched. WindowServer
      sometimes keeps a stale click shape after the island's layers change, so every 0.5 s the
@@ -68,8 +70,9 @@ Notes
     already running, it stays out of the island until it restarts; --restart-siri quits it once
     the patches are in place (macOS starts it again when it is needed). If Siri AI is off or not
     available on the Mac, this makes no difference.
-  - The script never modifies SIP or files on the system volume. The only file it leaves behind
-    is the top edge module in ~/Library/Group Containers/com.apple.MenuBar, removed by --disable.
+  - The script never modifies SIP or files on the system volume. Runtime copies live under
+    ~/Library/Application Support/DynamicEnabler. The top edge module lives only in process
+    memory; --disable removes the runtime copies and restarts MenuBarAgent to clear the module.
 
 Usage
   python3 enable_dynamic_island.py                      interactive setup
@@ -124,6 +127,13 @@ def fail(message):
     sys.exit("Error: " + message)
 
 
+def trash_path(path):
+    """Moves a project-created file or directory to the user's Trash."""
+    if not os.path.lexists(path):
+        return True
+    return run("/usr/bin/trash", path).returncode == 0
+
+
 def gui_domain():
     return f"gui/{os.getuid()}"
 
@@ -137,12 +147,6 @@ def menubaragent_pid():
 # ---------------------------------------------------------------------------------------------
 # Environment checks
 # ---------------------------------------------------------------------------------------------
-
-def sip_fully_disabled():
-    """True only when SIP is fully off. Partial SIP still protects the App Group container,
-    so the top edge module cannot be installed and top edge clicks are unavailable."""
-    return bool(re.search(r"status:\s*disabled", run("csrutil", "status").stdout, re.I))
-
 
 def check_sip():
     """Only SIP's debugging restriction blocks lldb; the rest of SIP can stay on."""
@@ -568,73 +572,285 @@ def patch_menubar(patches):
 # Top edge clicks (module loaded into MenuBarAgent, see "Top edge clicks" at the top)
 # ---------------------------------------------------------------------------------------------
 
-TOP_HIT_DIR = os.path.expanduser("~/Library/Group Containers/com.apple.MenuBar")   # readable in MenuBarAgent's sandbox
+TOP_HIT_DIR = os.path.expanduser("~/Library/Group Containers/com.apple.MenuBar")   # legacy dylib cleanup only
 TOP_HIT_PREFIX = "DynamicEnablerTopHit"
+# LLDB has no usable AppKit module search path when attaching to this system binary. Its
+# expression compiler also cannot persist Objective-C AST nodes between expressions. Supply
+# the arm64 SDK declarations and the implementation as ONE expression prefix instead. No
+# dylib is mapped, no sandbox extension is issued, and no protected container is written.
+TOP_HIT_JIT_PREFIX = r'''
+typedef bool BOOL;
+typedef unsigned long NSUInteger;
+typedef long NSInteger;
+typedef unsigned int uint32_t;
+typedef double CGFloat;
+typedef struct CGPoint { CGFloat x, y; } CGPoint;
+typedef struct CGSize { CGFloat width, height; } CGSize;
+typedef struct CGRect { CGPoint origin; CGSize size; } CGRect;
+typedef CGRect NSRect;
+typedef struct objc_method *Method;
+typedef void (*IMP)(void);
+typedef const struct __CFString *CFStringRef;
+typedef struct CGColor *CGColorRef;
+typedef struct dispatch_queue_s *dispatch_queue_t;
+typedef struct { unsigned long state; id *itemsPtr; unsigned long *mutationsPtr; unsigned long extra[5]; } NSFastEnumerationState;
+#define YES true
+#define NO false
+#define nil ((id)0)
+#define OBJC_ASSOCIATION_RETAIN 0x301
+#define RTLD_LAZY 1
+#define kCALayerWidthSizable (1U << 1)
+#define kCALayerHeightSizable (1U << 4)
+extern "C" {
+id objc_getAssociatedObject(id, const void *);
+void objc_setAssociatedObject(id, const void *, id, unsigned long);
+Method class_getInstanceMethod(Class, SEL);
+IMP method_setImplementation(Method, IMP);
+unsigned int method_getNumberOfArguments(Method);
+void method_getReturnType(Method, char *, unsigned long);
+void method_getArgumentType(Method, unsigned int, char *, unsigned long);
+Class objc_allocateClassPair(Class, const char *, unsigned long);
+void objc_disposeClassPair(Class);
+void objc_registerClassPair(Class);
+Class object_getClass(id);
+BOOL class_addMethod(Class, SEL, IMP, const char *);
+void *dlopen(const char *, int);
+void *dlsym(void *, const char *);
+double fabs(double);
+void dispatch_async_f(dispatch_queue_t, void *, void (*)(void *));
+CGColorRef CGColorGetConstantColor(CFStringRef);
+}
+#define objc_msgSend (dlsym((void *)-2, "objc_msgSend"))
+#define dispatch_get_main_queue() ((dispatch_queue_t)dlsym((void *)-2, "_dispatch_main_q"))
+#define kCGColorBlack (*(CFStringRef *)dlsym((void *)-2, "kCGColorBlack"))
+static inline CGFloat CGRectGetMaxY(CGRect r) { return r.origin.y + (r.size.height > 0 ? r.size.height : 0); }
+static inline CGFloat NSMidX(NSRect r) { return r.origin.x + r.size.width / 2; }
+static inline CGFloat NSMaxY(NSRect r) { return CGRectGetMaxY(r); }
+static inline NSRect NSRectFromCGRect(CGRect r) { return r; }
+static inline CGPoint CGPointMake(CGFloat x, CGFloat y) { return (CGPoint){x,y}; }
+@class NSString, NSArray, NSMutableArray, NSDictionary, CALayer, NSWindow, NSView;
+@class NSNotificationCenter, NSTimer;
+@interface NSObject
++ (id)alloc;
+- (id)init;
++ (Class)class;
+- (BOOL)respondsToSelector:(SEL)de_sel;
+- (BOOL)isKindOfClass:(Class)de_cls;
+- (id)copy;
+- (id)mutableCopy;
+- (id)retain;
+- (oneway void)release;
+- (id)autorelease;
+@end
+@interface NSString : NSObject
+- (BOOL)isEqualToString:(NSString *)de_other;
++ (id)stringWithFormat:(NSString *)de_format, ...;
+@end
+@interface NSArray : NSObject
++ (id)arrayWithObjects:(const id[])de_objects count:(NSUInteger)de_count;
+@property(readonly) NSUInteger count;
+@property(readonly) id firstObject;
+- (id)objectAtIndexedSubscript:(NSUInteger)de_idx;
+- (NSUInteger)countByEnumeratingWithState:(NSFastEnumerationState *)de_state objects:(id *)de_buffer count:(NSUInteger)de_len;
+@end
+@interface NSMutableArray : NSArray
+- (void)addObject:(id)de_obj;
+- (void)removeObjectIdenticalTo:(id)de_obj;
+@end
+@interface NSDictionary : NSObject
++ (id)dictionaryWithObjects:(const id[])de_objects forKeys:(const id[])de_keys count:(NSUInteger)de_count;
+@end
+@interface NSNull : NSObject
++ (id)null;
+@end
+@interface CALayer : NSObject
++ (id)layer;
+@property(copy) NSString *name;
+@property(copy) NSArray *sublayers;
+@property(copy) NSArray *filters;
+@property(copy) NSDictionary *actions;
+@property CGColorRef backgroundColor;
+@property CGRect frame;
+@property CGRect bounds;
+@property CGFloat cornerRadius;
+@property BOOL masksToBounds;
+@property unsigned int autoresizingMask;
+@property(readonly) CALayer *superlayer;
+- (void)insertSublayer:(CALayer *)de_layer atIndex:(unsigned int)de_index;
+- (void)removeFromSuperlayer;
+- (CGRect)convertRect:(CGRect)de_rect toLayer:(CALayer *)de_layer;
+@end
+@interface CATransaction : NSObject
++ (void)begin;
++ (void)commit;
++ (void)setDisableActions:(BOOL)de_value;
+@end
+@interface NSView : NSObject
+@property(readonly) NSView *superview;
+@property(readonly) CALayer *layer;
+@end
+@interface NSWindow : NSObject
+@property(readonly) NSInteger level;
+@property(readonly) NSInteger windowNumber;
+@property(readonly) NSRect frame;
+@property(readonly) NSView *contentView;
+- (NSRect)convertRectToScreen:(NSRect)de_rect;
+@end
+@interface NSApplication : NSObject
++ (NSApplication *)sharedApplication;
+@property(readonly) NSArray *windows;
+@end
+@interface NSScreen : NSObject
++ (NSArray *)screens;
+@property(readonly) NSRect frame;
+@end
+@interface NSWorkspace : NSObject
++ (NSWorkspace *)sharedWorkspace;
+@property(readonly) BOOL accessibilityDisplayShouldInvertColors;
+@property(readonly) NSNotificationCenter *notificationCenter;
+@end
+@interface NSNotificationCenter : NSObject
+- (void)addObserver:(id)de_observer selector:(SEL)de_selector name:(NSString *)de_name object:(id)de_obj;
+@end
+@interface NSTimer : NSObject
++ (NSTimer *)timerWithTimeInterval:(double)de_interval target:(id)de_target selector:(SEL)de_selector userInfo:(id)de_info repeats:(BOOL)de_repeats;
+@property double tolerance;
+@end
+@interface NSRunLoop : NSObject
++ (NSRunLoop *)mainRunLoop;
+- (void)addTimer:(NSTimer *)de_timer forMode:(NSString *)de_mode;
+@end
+@interface NSThread : NSObject
++ (BOOL)isMainThread;
+@end
+extern "C" { SEL NSSelectorFromString(NSString *); }
+#define NSApp ([NSApplication sharedApplication])
+#define NSRunLoopCommonModes (*(NSString **)dlsym((void *)-2, "NSRunLoopCommonModes"))
+#define NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification (*(NSString **)dlsym((void *)-2, "NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification"))
+'''
+
 TOP_HIT_SOURCE = r'''
+#ifndef DYNAMIC_ENABLER_JIT
 #import <AppKit/AppKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
+#define DE_LOCAL static
+#else
+#define DE_LOCAL
+#endif
+#ifndef DYNAMIC_ENABLER_TOP_HIT_VERSION
+#define DYNAMIC_ENABLER_TOP_HIT_VERSION 1
+#endif
+#if __has_feature(objc_arc)
+#define DE_KEEP(obj) (obj)
+#define DE_DROP(obj) ((void)0)
+#define DE_AUTORELEASE(obj) (obj)
+#else
+#define DE_KEEP(obj) [(obj) retain]
+#define DE_DROP(obj) [(obj) release]
+#define DE_AUTORELEASE(obj) [(obj) autorelease]
+#endif
 
-static NSString *const kName = @"DynamicEnablerTopHit";
-static char kSavedFilters;              // container -> its filters before the invert filter was removed
-static BOOL gEnabled, gScanQueued, gWriting;
-static IMP gOrigSetHit, gOrigSetFilters;
-static int gCount, gRefreshes;
-static NSMutableArray *gCovered;        // [window, container, hit layer] of every covered island
+#define kName @"DynamicEnablerTopHit"
+#define kStripName @"DynamicEnablerTopStrip"
+DE_LOCAL char kSavedFilters;              // container -> its filters before the invert filter was removed
+DE_LOCAL char kStripKey;                  // island window -> rectangular opaque top-row strip
+DE_LOCAL BOOL gEnabled, gScanQueued, gWriting, gInitialized;
+DE_LOCAL IMP gOrigSetHit, gOrigSetFilters;
+DE_LOCAL int gCount, gStrips, gRefreshes, gTopChecks, gTopMisses, gTopErrors;
+DE_LOCAL NSMutableArray *gCovered;        // [window, container, hit layer] of every covered island
+DE_LOCAL id gObserver;
 
 typedef int (*FindWindowFn)(int, int, int, int, const CGPoint *, CGPoint *, uint32_t *, int *);
-static int (*gMainConnection)(void);
-static FindWindowFn gFindWindow;
+DE_LOCAL int (*gMainConnection)(void);
+DE_LOCAL FindWindowFn gFindWindow;
 
-static BOOL isHitLayer(CALayer *l) {
-    static SEL sel; if (!sel) sel = NSSelectorFromString(@"hitTestsAsOpaque");
+DE_LOCAL BOOL isHitLayer(CALayer *l) {
+    SEL sel = NSSelectorFromString(@"hitTestsAsOpaque");
     return [l respondsToSelector:sel] && ((BOOL (*)(id, SEL))objc_msgSend)(l, sel);
 }
 
-static BOOL isInvertFilter(id f) {
-    for (NSString *key in @[@"type", @"name"]) {
-        @try {
-            id v = [f valueForKey:key];
-            if ([v isKindOfClass:[NSString class]] && [v isEqualToString:@"colorInvertDisplayAware"]) return YES;
-        } @catch (__unused id e) {}
+DE_LOCAL BOOL isInvertFilter(id f) {
+    for (NSString *de_key in @[@"type", @"name"]) {
+        SEL de_selector = NSSelectorFromString(de_key);
+        if (![f respondsToSelector:de_selector]) continue;
+        id v = ((id (*)(id, SEL))objc_msgSend)(f, de_selector);
+        if ([v isKindOfClass:[NSString class]] && [v isEqualToString:@"colorInvertDisplayAware"]) return YES;
     }
     return NO;
 }
 
-static void setFiltersRaw(CALayer *l, NSArray *filters) {
+DE_LOCAL void setFiltersRaw(CALayer *l, NSArray *filters) {
     gWriting = YES;
     ((void (*)(id, SEL, NSArray *))gOrigSetFilters)(l, @selector(setFilters:), filters);
     gWriting = NO;
 }
 
-static void stripFilter(CALayer *container) {
+DE_LOCAL void stripFilter(CALayer *container) {
     NSArray *filters = container.filters;
     if (!filters.count) return;
-    NSIndexSet *found = [filters indexesOfObjectsPassingTest:^BOOL(id f, NSUInteger i, BOOL *stop) { return isInvertFilter(f); }];
-    if (!found.count) return;
-    objc_setAssociatedObject(container, &kSavedFilters, filters, OBJC_ASSOCIATION_RETAIN);
     NSMutableArray *rest = [filters mutableCopy];
-    [rest removeObjectsAtIndexes:found];
-    setFiltersRaw(container, rest.count ? rest : nil);
+    for (id f in filters) if (isInvertFilter(f)) [rest removeObjectIdenticalTo:f];
+    if (rest.count != filters.count) {
+        objc_setAssociatedObject(container, &kSavedFilters, filters, OBJC_ASSOCIATION_RETAIN);
+        setFiltersRaw(container, rest.count ? rest : nil);
+    }
+    DE_DROP(rest);
 }
 
-static void restoreFilter(CALayer *container) {
-    NSArray *saved = objc_getAssociatedObject(container, &kSavedFilters);
+DE_LOCAL void restoreFilter(CALayer *container) {
+    NSArray *saved = DE_KEEP(objc_getAssociatedObject(container, &kSavedFilters));
     if (!saved) return;
     objc_setAssociatedObject(container, &kSavedFilters, nil, OBJC_ASSOCIATION_RETAIN);
     setFiltersRaw(container, saved);
+    DE_DROP(saved);
 }
 
-static CALayer *underlayOf(CALayer *hit) {
+DE_LOCAL CALayer *underlayOf(CALayer *hit) {
     for (CALayer *c in hit.sublayers) if ([c.name isEqualToString:kName]) return c;
     return nil;
 }
 
-static void walk(NSWindow *w, CALayer *l, BOOL add) {
-    for (CALayer *c in [l.sublayers copy]) {
-        if ([c.name isEqualToString:kName]) continue;
+DE_LOCAL CALayer *islandRoot(NSWindow *w) {
+    return (w.contentView.superview ?: w.contentView).layer;
+}
+
+DE_LOCAL void clearTopStrip(NSWindow *w) {
+    CALayer *s = objc_getAssociatedObject(w, &kStripKey);
+    if (!s) return;
+    [s removeFromSuperlayer];
+    objc_setAssociatedObject(w, &kStripKey, nil, OBJC_ASSOCIATION_RETAIN);
+}
+
+// The rounded clipping shape used for hit testing is narrower than the painted top row near the
+// corners, leaving a thin dead band where clicks reach the menu bar. A rectangular opaque strip
+// over the flat part of the painted row makes that row part of the island's window alpha.
+DE_LOCAL void ensureTopStrip(NSWindow *w, CALayer *container) {
+    CALayer *root = islandRoot(w);
+    if (!root) return;
+    CGRect lr = [container convertRect:container.bounds toLayer:root];
+    if (fabs(CGRectGetMaxY(lr) - root.bounds.size.height) > 0.5) { clearTopStrip(w); return; }
+    CGFloat flat = lr.size.width - 2.0 * container.cornerRadius;
+    if (flat < 2.0) { clearTopStrip(w); return; }
+    CALayer *s = objc_getAssociatedObject(w, &kStripKey);
+    if (!s) {
+        s = [CALayer layer];
+        s.name = kStripName;
+        s.backgroundColor = CGColorGetConstantColor(kCGColorBlack);
+        s.actions = @{@"bounds": [NSNull null], @"position": [NSNull null], @"frame": [NSNull null],
+                      @"onOrderIn": [NSNull null], @"onOrderOut": [NSNull null]};
+        objc_setAssociatedObject(w, &kStripKey, s, OBJC_ASSOCIATION_RETAIN);
+    }
+    if (s.superlayer != root) [root insertSublayer:s atIndex:0];
+    s.frame = (CGRect){{NSMidX(lr) - flat / 2.0, root.bounds.size.height - 1.0}, {flat, 1.0}};
+    gStrips++;
+}
+
+DE_LOCAL void walk(NSWindow *w, CALayer *l, BOOL add) {
+    for (CALayer *c in DE_AUTORELEASE([l.sublayers copy])) {
+        if ([c.name isEqualToString:kName] || [c.name isEqualToString:kStripName]) continue;
         // Island hit-test layers sit directly inside the rounded, clipping island container.
         if (isHitLayer(c) && l.cornerRadius > 0 && l.masksToBounds) {
             CALayer *u = underlayOf(c);
@@ -650,26 +866,30 @@ static void walk(NSWindow *w, CALayer *l, BOOL add) {
                                   @"onOrderIn": [NSNull null], @"onOrderOut": [NSNull null]};
                     [c insertSublayer:u atIndex:0];
                 }
+                ensureTopStrip(w, l);
                 gCount++;
                 [gCovered addObject:@[w, l, c]];
             } else {
                 [u removeFromSuperlayer];
                 restoreFilter(l);
+                clearTopStrip(w);
             }
         }
         walk(w, c, add);
     }
 }
 
-static void scan(void) {
+DE_LOCAL void dynamic_enabler_scan_top_hit(void) {
     BOOL add = gEnabled && !NSWorkspace.sharedWorkspace.accessibilityDisplayShouldInvertColors;
-    gCount = 0;
-    gCovered = [NSMutableArray array];
+    gCount = gStrips = 0;
+    DE_DROP(gCovered);
+    gCovered = [[NSMutableArray alloc] init];
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     for (NSWindow *w in NSApp.windows) {
         if (w.level != 26 || w.frame.size.height < 200) continue;      // the full-screen island window
         CALayer *root = (w.contentView.superview ?: w.contentView).layer;
+        if (!add) clearTopStrip(w);
         if (root) walk(w, root, add);
     }
     [CATransaction commit];
@@ -679,30 +899,38 @@ static void scan(void) {
 // opaque underlay is then ignored again). It recomputes the shape when the container's filters
 // are set, so each covered island that touches the top edge is checked by asking WindowServer
 // which window owns the middle of its top row of pixels, and refreshed only when that fails.
-static BOOL topRowReachable(NSWindow *w, CALayer *hit) {
-    if (!gFindWindow || !gMainConnection) return YES;
+DE_LOCAL int topRowReachable(NSWindow *w, CALayer *hit) {
+    if (!gFindWindow || !gMainConnection) return -1;
     CALayer *root = (w.contentView.superview ?: w.contentView).layer;
     CGRect r = [hit convertRect:hit.bounds toLayer:root];
-    if (fabs(CGRectGetMaxY(r) - root.bounds.size.height) > 0.5) return YES;   // not at the top edge
-    if (r.size.width < r.size.height + 4) return YES;      // a circle touches the edge in one point only
+    if (fabs(CGRectGetMaxY(r) - root.bounds.size.height) > 0.5) return 2;   // not at the top edge
+    if (r.size.width < r.size.height + 4) return 2;      // a circle touches the edge in one point only
     NSRect s = [w convertRectToScreen:NSRectFromCGRect(r)];
-    CGFloat primary = NSScreen.screens.firstObject.frame.size.height;
+    CGFloat primary = ((NSScreen *)NSScreen.screens.firstObject).frame.size.height;
     CGPoint p = CGPointMake(NSMidX(s), primary - NSMaxY(s)), out;
     uint32_t wid = 0; int owner = 0;
-    if (gFindWindow(gMainConnection(), 0, 1, 0, &p, &out, &wid, &owner) != 0) return YES;
+    if (gFindWindow(gMainConnection(), 0, 1, 0, &p, &out, &wid, &owner) != 0) return -1;
     return wid == (uint32_t)w.windowNumber;
 }
 
-static void checkTopRows(void) {
-    for (NSArray *item in [gCovered copy]) {
+DE_LOCAL void checkTopRows(void) {
+    gTopChecks = gTopMisses = gTopErrors = 0;
+    for (NSArray *item in DE_AUTORELEASE([gCovered copy])) {
         NSWindow *w = item[0]; CALayer *container = item[1], *hit = item[2];
-        if (!hit.superlayer || topRowReachable(w, hit)) continue;
+        if (!hit.superlayer) continue;
+        int result = topRowReachable(w, hit);
+        if (result == 2) continue;
+        if (result < 0) { gTopErrors++; continue; }
+        gTopChecks++;
+        if (result == 1) continue;
+        gTopMisses++;
         gRefreshes++;
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
-        NSArray *current = container.filters;
+        NSArray *de_current = DE_KEEP(container.filters);
         setFiltersRaw(container, @[]);
-        setFiltersRaw(container, current);
+        setFiltersRaw(container, de_current);
+        DE_DROP(de_current);
         ((void (*)(id, SEL, BOOL))gOrigSetHit)(hit, NSSelectorFromString(@"setHitTestsAsOpaque:"), NO);
         ((void (*)(id, SEL, BOOL))gOrigSetHit)(hit, NSSelectorFromString(@"setHitTestsAsOpaque:"), YES);
         [CATransaction commit];
@@ -711,20 +939,22 @@ static void checkTopRows(void) {
 
 __attribute__((visibility("default"))) int dynamic_enabler_top_hit_refreshes(void) { return gRefreshes; }
 
-static void queueScan(void) {
+DE_LOCAL void scanCallback(void *unused) { gScanQueued = NO; dynamic_enabler_scan_top_hit(); }
+
+DE_LOCAL void queueScan(void) {
     if (gScanQueued) return;
     gScanQueued = YES;
-    dispatch_async(dispatch_get_main_queue(), ^{ gScanQueued = NO; scan(); });
+    dispatch_async_f(dispatch_get_main_queue(), (void *)0, scanCallback);
 }
 
 // New island layers turn on hit testing through this setter: rescan once the tree is assembled.
-static void hookedSetHit(id self, SEL _cmd, BOOL value) {
+DE_LOCAL void hookedSetHit(id self, SEL _cmd, BOOL value) {
     ((void (*)(id, SEL, BOOL))gOrigSetHit)(self, _cmd, value);
     if (value && gEnabled) queueScan();
 }
 
 // A container whose filter was removed may get its filters assigned again.
-static void hookedSetFilters(CALayer *self, SEL _cmd, NSArray *filters) {
+DE_LOCAL void hookedSetFilters(CALayer *self, SEL _cmd, NSArray *filters) {
     ((void (*)(id, SEL, NSArray *))gOrigSetFilters)(self, _cmd, filters);
     if (!gWriting && objc_getAssociatedObject(self, &kSavedFilters)) {
         objc_setAssociatedObject(self, &kSavedFilters, nil, OBJC_ASSOCIATION_RETAIN);
@@ -732,35 +962,60 @@ static void hookedSetFilters(CALayer *self, SEL _cmd, NSArray *filters) {
     }
 }
 
-// Returns the number of island hit-test layers that are currently covered.
-__attribute__((visibility("default"))) int dynamic_enabler_top_hit(int enable) {
-    void (^work)(void) = ^{
-        static dispatch_once_t once;
-        dispatch_once(&once, ^{
-            Method m = class_getInstanceMethod([CALayer class], NSSelectorFromString(@"setHitTestsAsOpaque:"));
-            if (m) gOrigSetHit = method_setImplementation(m, (IMP)hookedSetHit);
-            m = class_getInstanceMethod([CALayer class], @selector(setFilters:));
-            gOrigSetFilters = method_setImplementation(m, (IMP)hookedSetFilters);
-            [NSWorkspace.sharedWorkspace.notificationCenter
-                addObserverForName:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification object:nil
-                queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) { queueScan(); }];
-            void *sky = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY);
-            if (sky && gOrigSetHit) {
-                gMainConnection = (int (*)(void))dlsym(sky, "SLSMainConnectionID");
-                gFindWindow = (FindWindowFn)dlsym(sky, "SLSFindWindowAndOwner");
-            }
-            // Every 0.5 s: check the click shapes WindowServer has from the previous pass, then
-            // cover layers that were rebuilt without going through the hooked setters.
-            NSTimer *t = [NSTimer timerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *timer) {
-                if (gEnabled) { checkTopRows(); scan(); }
-            }];
-            t.tolerance = 0.2;
-            [NSRunLoop.mainRunLoop addTimer:t forMode:NSRunLoopCommonModes];
-        });
-        gEnabled = enable != 0;
-        scan();
-    };
-    if ([NSThread isMainThread]) work(); else dispatch_sync(dispatch_get_main_queue(), work);
+int dynamic_enabler_top_hit(int enable);
+DE_LOCAL void timerTick(id self, SEL command, id timer) {
+    if (gEnabled) { dynamic_enabler_scan_top_hit(); checkTopRows(); }
+}
+DE_LOCAL int controlTopHit(id self, SEL command, int enable) { return dynamic_enabler_top_hit(enable); }
+DE_LOCAL int topHitVersion(id self, SEL command) { return DYNAMIC_ENABLER_TOP_HIT_VERSION; }
+DE_LOCAL id topHitStatus(id self, SEL command) {
+    return [NSString stringWithFormat:@"enabled=%d covered=%d strips=%d checks=%d misses=%d errors=%d refreshes=%d",
+            gEnabled, gCount, gStrips, gTopChecks, gTopMisses, gTopErrors, gRefreshes];
+}
+DE_LOCAL BOOL validSetter(Method method, char argument) {
+    if (!method || method_getNumberOfArguments(method) != 3) return NO;
+    char result[8] = {0}, value[8] = {0};
+    method_getReturnType(method, result, sizeof(result));
+    method_getArgumentType(method, 2, value, sizeof(value));
+    return result[0] == 'v' && value[0] == argument;
+}
+
+// Install on the main thread, once per process. The runtime class survives LLDB detaching and
+// exposes a versioned control entry so a retry cannot stack another set of method hooks.
+int dynamic_enabler_top_hit(int enable) {
+    if (![NSThread isMainThread]) return -1;
+    if (!gInitialized) {
+        Method hitMethod = class_getInstanceMethod([CALayer class], NSSelectorFromString(@"setHitTestsAsOpaque:"));
+        Method filterMethod = class_getInstanceMethod([CALayer class], @selector(setFilters:));
+        if (!validSetter(hitMethod, @encode(BOOL)[0]) || !validSetter(filterMethod, '@')) return -2;
+        void *sky = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY);
+        if (!sky) return -3;
+        gMainConnection = (int (*)(void))dlsym(sky, "SLSMainConnectionID");
+        gFindWindow = (FindWindowFn)dlsym(sky, "SLSFindWindowAndOwner");
+        if (!gMainConnection || !gFindWindow) return -3;
+        Class de_class = objc_allocateClassPair([NSObject class], "DynamicEnablerTopHitRuntime", 0);
+        if (!de_class) return -4;
+        Class meta = object_getClass((id)de_class);
+        if (!class_addMethod(de_class, @selector(tick:), (IMP)timerTick, "v@:@") ||
+            !class_addMethod(meta, @selector(dynamicEnablerSetEnabled:), (IMP)controlTopHit, "i@:i") ||
+            !class_addMethod(meta, @selector(dynamicEnablerVersion), (IMP)topHitVersion, "i@:") ||
+            !class_addMethod(meta, @selector(dynamicEnablerStatus), (IMP)topHitStatus, "@@:")) {
+            objc_disposeClassPair(de_class);
+            return -4;
+        }
+        objc_registerClassPair(de_class);
+        gObserver = [[de_class alloc] init];
+        gOrigSetHit = method_setImplementation(hitMethod, (IMP)hookedSetHit);
+        gOrigSetFilters = method_setImplementation(filterMethod, (IMP)hookedSetFilters);
+        [NSWorkspace.sharedWorkspace.notificationCenter addObserver:gObserver selector:@selector(tick:)
+            name:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification object:nil];
+        NSTimer *de_timer = [NSTimer timerWithTimeInterval:0.5 target:gObserver selector:@selector(tick:) userInfo:nil repeats:YES];
+        de_timer.tolerance = 0.2;
+        [NSRunLoop.mainRunLoop addTimer:de_timer forMode:NSRunLoopCommonModes];
+        gInitialized = YES;
+    }
+    gEnabled = enable != 0;
+    dynamic_enabler_scan_top_hit();
     return gCount;
 }
 '''
@@ -775,60 +1030,126 @@ def remove_top_hit_files():
         return
     for name in names:
         if name.startswith(TOP_HIT_PREFIX) and name.endswith(".dylib"):
-            os.remove(os.path.join(TOP_HIT_DIR, name))
+            trash_path(os.path.join(TOP_HIT_DIR, name))
 
 
-def top_hit_dir_ready():
-    """The App Group container must be listable to install the module. Partial SIP blocks it."""
+TOP_HIT_LLDB = r'''
+import json
+import lldb
+
+def __lldb_init_module(debugger, unused):
+    target = debugger.GetSelectedTarget()
+    process = target.GetProcess()
+    result = {"ok": False}
     try:
-        return os.path.isdir(TOP_HIT_DIR) and os.listdir(TOP_HIT_DIR) is not None
-    except OSError:
-        return False
+        if not process.IsValid() or process.GetState() != lldb.eStateStopped:
+            raise RuntimeError("MenuBarAgent did not stop for the debugger")
+        main = next((t for t in process if t.GetQueueName() == "com.apple.main-thread"), None)
+        if main is None:
+            main = next((t for t in process if t.GetIndexID() == 1), None)
+        if main is None:
+            raise RuntimeError("MenuBarAgent's main thread could not be found")
+        process.SetSelectedThread(main)
+        options = lldb.SBExpressionOptions()
+        options.SetLanguage(lldb.eLanguageTypeObjC_plus_plus)
+        options.SetTimeoutInMicroSeconds(5000000)
+        options.SetTryAllThreads(False)
+        options.SetIgnoreBreakpoints(True)
+        options.SetUnwindOnError(True)
 
+        def evaluate(expression):
+            value = target.EvaluateExpression(expression, options)
+            if value.GetError().Fail():
+                raise RuntimeError(str(value.GetError()))
+            return value.GetValueAsSigned()
 
-def build_top_hit():
-    """Compiles the module once per source version; returns its path or None."""
-    import hashlib
-    digest = hashlib.sha1(TOP_HIT_SOURCE.encode()).hexdigest()[:10]
-    dylib = os.path.join(TOP_HIT_DIR, f"{TOP_HIT_PREFIX}-{digest}.dylib")
-    if not top_hit_dir_ready():
-        return None         # the container is created by MenuBarAgent and is unreadable under partial SIP
-    if os.path.exists(dylib):
-        return dylib
-    remove_top_hit_files()
-    workdir = tempfile.mkdtemp(prefix="dynamic_island_")
-    try:
-        source = os.path.join(workdir, "TopHit.m")
-        with open(source, "w") as f:
-            f.write(TOP_HIT_SOURCE)
-        built = run("xcrun", "clang", "-dynamiclib", "-arch", "arm64e", "-fobjc-arc", "-O2",
-                    "-framework", "AppKit", "-framework", "QuartzCore", source, "-o", dylib)
-        if built.returncode or run("codesign", "-s", "-", "-f", dylib).returncode:
-            if os.path.exists(dylib):
-                os.remove(dylib)
-            return None
+        runtime = '(void *)objc_getClass("DynamicEnablerTopHitRuntime")'
+        send = '(void *)dlsym((void *)-2, "objc_msgSend")'
+        if evaluate('(unsigned long)' + runtime):
+            version = evaluate('((int(*)(void*,void*))' + send + ')(' + runtime +
+                               ', (void *)sel_registerName("dynamicEnablerVersion"))')
+            if version != __VERSION__:
+                raise RuntimeError("another top-edge module version is loaded; restart MenuBarAgent")
+            covered = evaluate('((int(*)(void*,void*,int))' + send + ')(' + runtime +
+                               ', (void *)sel_registerName("dynamicEnablerSetEnabled:"), 1)')
+        else:
+            with open(__SOURCE_PATH__) as source:
+                options.SetPrefix(source.read())
+            # One compilation unit: persisting these ObjC declarations with --top-level causes
+            # LLDB's AST importer to silently drop bodies containing ObjC messages/literals.
+            covered = evaluate('dynamic_enabler_top_hit(1)')
+        if covered < 0:
+            raise RuntimeError({-1: "installation must run on the main thread",
+                                -2: "required CALayer setters are missing or their ABI changed",
+                                -3: "WindowServer hit-test functions are unavailable",
+                                -4: "could not register the top-edge control class"}.get(covered, "native installation failed"))
+        result = {"ok": True, "covered": covered}
+    except Exception as error:
+        result["error"] = str(error)
     finally:
-        shutil.rmtree(workdir, ignore_errors=True)
-    return dylib
+        if process.IsValid() and process.GetState() == lldb.eStateStopped:
+            detached = process.Detach()
+            if detached.Fail():
+                result = {"ok": False, "error": "could not detach from MenuBarAgent: " + str(detached)}
+        print("DYNAMIC_ENABLER_TOP_HIT " + json.dumps(result), flush=True)
+'''
+
+
+def top_hit_jit_source():
+    """Version the ABI declarations and implementation together; keep both in the login copy."""
+    import hashlib
+    version = int(hashlib.sha256((TOP_HIT_JIT_PREFIX + TOP_HIT_SOURCE).encode()).hexdigest()[:8], 16) & 0x7fffffff
+    source = (f"#define DYNAMIC_ENABLER_JIT 1\n#define DYNAMIC_ENABLER_TOP_HIT_VERSION {version}\n" +
+              TOP_HIT_JIT_PREFIX + TOP_HIT_SOURCE)
+    return source, version
 
 
 def load_top_hit():
-    """Loads the module into the running MenuBarAgent. Returns a message, or None on success."""
-    dylib = build_top_hit()
-    if not dylib:
-        return "the module could not be compiled"
+    """JIT the native callbacks in memory using debug rights alone; return an error or None."""
+    import json
     pid = menubaragent_pid()
     if not pid:
         return "MenuBarAgent is not running"
-    out = run("xcrun", "lldb", "--batch", "-o", f"process attach --pid {pid}",
-              "-o", f'expr -l c -- (long)dlopen("{dylib}", 2)',
-              "-o", 'expr -l c -- ((int(*)(int))dlsym((void*)-2, "dynamic_enabler_top_hit"))(1)',
-              "-o", "detach").stdout
-    loaded = re.search(r"\(long\) \$0 = (\d+)", out)
-    called = re.search(r"\(int\) \$1 = (\d+)", out)
-    if not loaded or loaded.group(1) == "0" or not called:
-        return "lldb could not load the module"
-    return None
+    workdir = tempfile.mkdtemp(prefix="dynamic_island_top_hit_")
+    try:
+        native, version = top_hit_jit_source()
+        source = os.path.join(workdir, "TopHit.mm")
+        loader = os.path.join(workdir, "load_top_hit.py")
+        with open(source, "w") as f:
+            f.write(native)
+        with open(loader, "w") as f:
+            f.write(TOP_HIT_LLDB.replace("__SOURCE_PATH__", repr(source)).replace("__VERSION__", str(version)))
+        # Catch syntax/ABI declaration failures before attaching or changing any layers.
+        built = subprocess.run(["xcrun", "clang", "-fsyntax-only", "-arch", "arm64e", "-fno-objc-arc", source],
+                               text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+        if built.returncode:
+            return "native top-edge module failed to compile: " + built.stdout[-1000:].strip()
+        loaded = subprocess.run(["xcrun", "lldb", "--batch", "-o", f"process attach --pid {pid}",
+                                 "-o", "command script import " + json.dumps(loader)],
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                timeout=45, start_new_session=True)
+        if loaded.returncode:
+            return f"lldb exited with status {loaded.returncode} while installing the top-edge module"
+        records = [line.partition("DYNAMIC_ENABLER_TOP_HIT ")[2] for line in loaded.stdout.splitlines()
+                   if line.startswith("DYNAMIC_ENABLER_TOP_HIT ")]
+        if not records:
+            return "lldb did not confirm top-edge module installation"
+        result = json.loads(records[-1])
+        if not isinstance(result, dict):
+            return "lldb returned an invalid top-edge installation confirmation"
+        if result.get("ok") is True:
+            covered = result.get("covered")
+            if type(covered) is not int or covered < 0:
+                return "lldb did not confirm a valid native top-edge result"
+            return None
+        problem = result.get("error")
+        return problem if isinstance(problem, str) and problem else "native top-edge installation failed"
+    except subprocess.TimeoutExpired:
+        return "top-edge module installation timed out"
+    except (OSError, ValueError) as error:
+        return "top-edge module installation failed: " + str(error)
+    finally:
+        trash_path(workdir)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1347,11 +1668,7 @@ def restart_siri_ai():
     return "Siri AI was restarted so that it reconnects to the island (Siri AI and Spotlight)."
 
 
-def enable(layout, watch, restart_siri=False, warn_partial_sip=True, report=print):
-    if warn_partial_sip and layout != "classic" and not sip_fully_disabled():
-        report("Note: SIP is only partially disabled, so clicks on the top edge of the screen will "
-               "not reach the island. Fully disabling SIP (csrutil disable) enables them.")
-
+def enable(layout, watch, restart_siri=False, report=print):
     patches, geometry = build_patches(layout)
     restore = set_defaults()
 
@@ -1368,10 +1685,10 @@ def enable(layout, watch, restart_siri=False, warn_partial_sip=True, report=prin
         fail("The MenuBarAgent patch could not be confirmed. The previous preferences were restored.")
 
     top_hit_note = None
-    if layout != "classic" and sip_fully_disabled():    # partial SIP: already warned up front
+    if layout != "classic":
         time.sleep(3)       # let the new MenuBarAgent finish launching before loading the module
         problem = load_top_hit()
-        top_hit_note = ("Clicks at the top edge of the screen reach the island." if not problem else
+        top_hit_note = ("Top-edge click handling is enabled (in memory; debugging rights only)." if not problem else
                         f"Top edge clicks were not enabled ({problem}); everything else works.")
 
     siri_note = restart_siri_ai() if restart_siri else None
@@ -1505,10 +1822,6 @@ def main():
     if interactive and not sys.stdin.isatty():
         fail("Run the script in a terminal, or pass --enable or --disable.")
 
-    if interactive and args.layout != "classic" and not sip_fully_disabled():
-        print("Note: SIP is only partially disabled, so clicks on the top edge of the screen will "
-              "not reach the island.\nFully disabling SIP (csrutil disable) enables them.\n")
-
     action = "enable" if args.enable else "disable" if args.disable else ask(
         "What would you like to do?", [("enable", "Enable the Dynamic Island"),
                                        ("disable", "Disable the Dynamic Island")])
@@ -1531,7 +1844,7 @@ def main():
                         [(True, "Yes, apply it at login"),
                          (False, "No, apply it only now (run this script again after a restart)")])
 
-    enable(args.layout, not args.no_watch, restart_siri, warn_partial_sip=not interactive)
+    enable(args.layout, not args.no_watch, restart_siri)
     if autostart is None:
         autostart = os.path.exists(AUTOSTART_PLIST)
         if autostart:
